@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="robots" content="noindex" />
+  <link rel="stylesheet" href="/admin/admin.css" />
+  <link rel="stylesheet" href="/admin/timer/timer-admin.css" />
+  <title>Stream-Zeit</title>
+</head>
+<body data-phase="idle">
+  <!-- Every visible word is written by timer-admin.js from /strings.js (SPEC 1.1).
+       data-s = textContent. This file contains no user-facing copy. -->
+  <div id="topbar">
+    <header id="live-readout">
+      <div id="status-rule" aria-hidden="true"></div>
+      <div class="rd-line">
+        <span id="live-pill" class="pill"><span class="dot" aria-hidden="true"></span><span id="pill-text"></span></span>
+        <nav id="nav">
+          <a href="/admin/" data-s="navRun"></a>
+          <a href="/admin/timer/" aria-current="page" data-s="navTimer"></a>
+          <button id="btn-lang" class="lang" type="button" data-st="tipLang"></button>
+        </nav>
+      </div>
+      <div id="rd-title" class="rd-title"></div>
+      <div class="counters" id="stats"></div>
+    </header>
+
+    <div id="live-actions">
+      <div class="act-row">
+        <button id="btn-pause" class="act act-loss" type="button"></button>
+        <button id="btn-plus" class="act act-win" type="button" data-s="plusHour" data-st="tipPlusHour"></button>
+      </div>
+    </div>
+  </div>
+
+  <main id="page">
+    <p id="banner" class="banner" hidden><span id="banner-text" class="banner-text"></span></p>
+
+    <!-- Two independent columns (see timer-admin.css #page). -->
+    <div class="col">
+
+    <details id="sec-run" class="sec" open>
+      <summary class="sec-head"><span class="sec-title" data-s="secRun"></span>
+        <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5" /></svg></summary>
+      <div class="sec-body" id="run-body"></div>
+    </details>
+
+    <details id="sec-config" class="sec" open>
+      <summary class="sec-head"><span class="sec-title" data-s="secConfig"></span>
+        <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5" /></svg></summary>
+      <div class="sec-body" id="config-body"></div>
+    </details>
+
+    </div><!-- /.col -->
+    <div class="col">
+
+    <details id="sec-campaigns" class="sec" open>
+      <summary class="sec-head"><span class="sec-title" data-s="secCampaigns"></span>
+        <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5" /></svg></summary>
+      <div class="sec-body" id="camp-body"></div>
+    </details>
+
+    <details id="sec-donations" class="sec">
+      <summary class="sec-head"><span class="sec-title" data-s="secDonations"></span>
+        <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5" /></svg></summary>
+      <div class="sec-body" id="don-body"></div>
+    </details>
+
+    <details id="sec-ledger" class="sec">
+      <summary class="sec-head"><span class="sec-title" data-s="secLedger"></span>
+        <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5" /></svg></summary>
+      <div class="sec-body" id="ledger-body"></div>
+    </details>
+
+    </div><!-- /.col -->
+  </main>
+
+  <script type="module" src="/admin/timer/timer-admin.js"></script>
+</body>
+</html>

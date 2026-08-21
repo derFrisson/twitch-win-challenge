@@ -1,0 +1,5 @@
+# .dev.vars.example  (committed; .dev.vars* is gitignored)
+CF_TEAM_DOMAIN=example.cloudflareaccess.com
+CF_ACCESS_AUD=0000000000000000000000000000000000000000000000000000000000000000
+IGDB_CLIENT_ID=dummy-client-id
+IGDB_CLIENT_SECRET=dummy-client-secret

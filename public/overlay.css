@@ -1,0 +1,597 @@
+/* overlay.css — the broadcast graphic (SPEC §7.2, DESIGN §1–§5).
+   Also linked by recap.html (SPEC §1), which is why the --viz-* tokens live here.
+
+   THE HOUSE RULE: animate `transform` and `opacity`. Nothing else, ever (SPEC §7.6). Every
+   colour change is a cross-fade of two pre-coloured stacked layers.
+
+   Cascade order in this file is load-bearing: `#card[data-anim="x"] #el` and
+   `#card[data-mode="y"] #el` have IDENTICAL specificity, so the beat rules (§4) must come
+   AFTER the mode rules (§3) or a beat cannot override a resting state. Do not reorder. */
+
+/* ============================== TOKENS-BEGIN ==============================
+   Shared by overlay.css and admin/admin.css. Byte-identical in both files.
+   ponytail: duplicated, not imported. The §1 file tree has no tokens.css, and an
+   @import would add a render-blocking request in front of the overlay's first paint
+   — on camera, on every OBS source refresh. 40 literal lines is the cheaper copy.
+   Ceiling: if a third surface appears, add public/tokens.css and link it from all three.
+   Drift check (must print nothing):
+     diff <(sed -n '/TOKENS-BEGIN/,/TOKENS-END/p' public/overlay.css) \
+          <(sed -n '/TOKENS-BEGIN/,/TOKENS-END/p' public/admin/admin.css)
+   ========================================================================== */
+:root {
+  /* ---- ink ramp: one cool near-black ramp, used by all three surfaces ---- */
+  --ink-1000: #05060A;   /* plate base — the deepest surface in the system */
+  --ink-950:  #0A0B0F;   /* admin page plane */
+  --ink-900:  #101218;   /* card fill base / recap chart surface / admin section */
+  --ink-800:  #171A22;   /* raised control */
+  --ink-700:  #232733;   /* pressed control, input well */
+  --ink-600:  #333947;
+  --ink-500:  #4B5364;   /* axis, baseline, outline-button border */
+  --ink-400:  #6E7889;   /* de-emphasis data mark */
+  --ink-300:  #9BA4B4;   /* muted ink — OPAQUE surfaces only, never over gameplay */
+  --ink-200:  #C6CCD8;   /* secondary ink */
+  --ink-100:  #E6E9EF;
+  --ink-000:  #FFFFFF;   /* primary ink and every hero numeral */
+
+  /* ---- accent: the ONE recolourable value. See §1.5. ---- */
+  --accent:     #FF5A1F;
+  --accent-rgb: 255, 90, 31;
+
+  /* ---- status: lifted verbatim from dataviz/references/palette.md, unchanged ---- */
+  --good:     #0CA30C;   /* LIVE, won            5.58:1 on --ink-900 */
+  --warning:  #FAB219;   /* armed "stop after"  10.20:1 */
+  --serious:  #EC835A;   /* skipped              7.10:1 */
+  --critical: #D03B3B;   /* stop now, 409        3.90:1 */
+
+  /* ---- data marks: fixed, validated, NEVER derived from --accent (§7.1) ---- */
+  --viz-win:  #3987E5;   /* 5.14:1 on --ink-900 */
+  --viz-loss: #E66767;   /* 5.80:1 */
+  --viz-mute: var(--ink-400);
+  --viz-grid: #3D4557;   /* 1.95:1 — recessive but survives H.264 at 2px */
+  --viz-axis: var(--ink-500);
+
+  /* ---- type scale: Inter, ratio ~1.28, every step a whole px ---- */
+  --t-xs:    13px;
+  --t-sm:    16px;
+  --t-md:    20px;
+  --t-lg:    26px;
+  --t-xl:    33px;
+  --t-2xl:   42px;
+  --t-3xl:   54px;
+  --t-4xl:   76px;
+  --t-hero:  92px;
+
+  /* ---- spacing: 4px base ---- */
+  --s-1: 4px;  --s-2: 8px;  --s-3: 12px; --s-4: 16px;
+  --s-5: 24px; --s-6: 32px; --s-7: 48px; --s-8: 64px;
+
+  /* ---- radii ---- */
+  --r-sm: 6px; --r-md: 12px; --r-lg: 16px; --r-xl: 22px; --r-pill: 999px;
+
+  /* ---- easing: five curves, no sixth ---- */
+  --e-out:  cubic-bezier(.16, 1, .3, 1);        /* entrances, wipes — exponential ease-out */
+  --e-in:   cubic-bezier(.55, 0, 1, .45);       /* exits — accelerate away and be gone */
+  --e-land: cubic-bezier(.18, 1.28, .3, 1);     /* the weighty landing: ~8% overshoot, then settle */
+  --e-drop: cubic-bezier(.62, .02, .88, .24);   /* the deflate: hangs, then falls */
+  --e-io:   cubic-bezier(.42, 0, .58, 1);       /* the flame's default */
+
+  /* ---- durations: the SAME numbers as overlay.js's DUR map (SPEC §7.4). See §4.1. ---- */
+  --d-undo:         250ms;
+  --d-intro-fade:   400ms;   /* cause session_start */
+  --d-win:          450ms;
+  --d-wipe:         500ms;   /* cause skip AND game_abandoned */
+  --d-loss:         600ms;
+  --d-streak-in:    700ms;
+  --d-end:          700ms;   /* cause session_end */
+  --d-streak-break: 800ms;
+  --d-intro:        900ms;   /* cause game_start */
+  --d-won:         1800ms;
+  --d-ui:           140ms;   /* admin only: press/hover feedback */
+}
+/* =============================== TOKENS-END =============================== */
+
+/* ---------------------------- overlay-only tokens (DESIGN §1.2) ---------------------------- */
+:root {
+  --card-alpha: 0.85;   /* ?opacity=, clamped 0.30..1.00 — DECORATIVE FILL ONLY (§2.3) */
+  --scale:      1;      /* ?scale=, clamped 0.50..2.00 */
+
+  /* Fixed geometry. The card never reflows, so ?pos= is pure static inset arithmetic. */
+  /* V2 compact list. Measured against the commercial tool's live DOM (255x350) and trimmed:
+     no footer, so the panel is header + rows only. The panel does NOT reflow — rows are a
+     fixed height and the list clips, so ?pos= stays pure static inset arithmetic. */
+  --card-w:   264px;
+  --head-h:    26px;
+  --row-h:     30px;
+  --rows-max:   9;      /* rows shown before the list clips; 9*30 + 40 = 310px tall */
+  --card-pad:  10px;
+  --cover-w:   30px;    /* the ACTIVE row only (user decision: current game, small) */
+  --gutter:     8px;
+  --edge:     48px;     /* distance from the viewport edge for every ?pos= */
+
+  /* The legibility layers. NOT tunable. This is the whole §2.3 guarantee. */
+  --scrim:       rgba(5, 6, 10, .62);
+  --plate-fill:  rgba(5, 6, 10, .94);
+  --hairline:    rgba(255, 255, 255, .10);
+  --sheen:       rgba(255, 255, 255, .085);
+  --silhouette:  rgba(0, 0, 0, .55);   /* the outer dark ring — see §2.2 note 4 */
+
+  --noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.30'/%3E%3C/svg%3E");
+}
+
+/* ------------------------- recap / viz tokens (DESIGN §1.4) -------------------------
+   recap.html links this stylesheet (SPEC §1) and has no tokens of its own beyond these. */
+:root {
+  --viz-surface:  var(--ink-900);
+  --viz-plate:    rgba(5, 6, 10, .96);   /* the recap card is near-opaque: it is a still, not an overlay */
+  --viz-stroke:   3px;    /* SPEC §6.4 minimum. Never smaller, anywhere. */
+  --viz-grid-w:   2px;    /* SPEC §6.4 minimum gridline */
+  --viz-axis-w:   3px;
+  --viz-bar:     20px;    /* bar thickness — under the dataviz 24px cap, air in the band */
+  --viz-gap:      2px;    /* surface gap between touching marks */
+  --viz-dot:     10px;    /* win marker diameter (dataviz floor is 8px; bitrate wants 10) */
+}
+
+/* ------------------------------- the one face (DESIGN §8.1) ------------------------------- */
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/inter-var-latin.woff2') format('woff2');
+  font-weight: 400 900;
+  font-style: normal;
+  font-display: block;
+  /* format('woff2') — NOT format('woff2-variations'). The latter is a dead early-draft keyword
+     that Chromium (and therefore OBS's CEF) does not recognise, and an unrecognised format()
+     makes the UA skip that src component entirely: Inter would never even be requested, and
+     font-display:block hides the swap, so the whole overlay renders in the CEF default font with
+     no 404 in the log to explain it. Plain woff2 loads variable fonts everywhere.
+     font-display:block, not swap: a FOUT on camera looks broken. */
+}
+
+/* --------------------------------- the transparent page --------------------------------- */
+html, body {
+  background: transparent !important;   /* !important: OBS's Custom CSS field gets cleared by
+                                          streamers, and some hosts force a background */
+  margin: 0;
+  overflow: hidden;
+  /* zero opaque paint anywhere outside #card */
+}
+
+/* ======================================================================================
+   2. THE PANEL — translucent WITHOUT backdrop-filter (DESIGN §2, overlay v2)
+
+   backdrop-filter is architecturally impossible here: OBS renders this page off-screen into
+   an isolated RGBA texture with no access to the scene pixels beneath it, so a blur has
+   nothing to sample and paints nothing, black, or garbage (confirmed by an OBS maintainer,
+   plus CEF OSR bug #2938). CSS blur is also a documented OBS CPU hog that scales with the
+   SOURCE's pixel dimensions. So the translucency is a layered rgba stack, and it always was.
+   ====================================================================================== */
+
+#card {
+  position: fixed;
+  width: var(--card-w);
+  /* Height is content-driven but BOUNDED: max-height clips a long playlist instead of
+     growing off-canvas. No `height`, so a two-line title cannot clip its own row. */
+  max-height: calc(var(--head-h) + var(--row-h) * var(--rows-max));
+
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 6px;
+  transform: scale(var(--scale));
+  /* contain:paint makes this a stacking context, so the scrim and the takeover cannot escape
+     the panel, and it stops the list's overflow from creating a scroll container that paints
+     outside the rounded corner. */
+  contain: paint;
+  /* Layer stack, bottom to top: silhouette ring (separates the panel from bright gameplay),
+     the fill, the hairline. Static — none of this animates. */
+  background:
+    linear-gradient(180deg, var(--sheen) 0, transparent 44px),
+    var(--panel-fill);
+  box-shadow: 0 0 0 1px var(--hairline), 0 2px 18px var(--silhouette);
+  /* Nothing else in this file sets a family, and @font-face alone applies NOTHING — without
+     this line the whole overlay renders in CEF's default serif, which is the exact
+     "fallback-font overlay looks broken on camera" failure prompt §6.1 warns about. The stack
+     after Inter is a real fallback, not decoration: if the woff2 ever 404s we get a system
+     sans, not Times. */
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-variant-numeric: tabular-nums;   /* 9 -> 10 must not shift the row */
+}
+
+/* The DECORATIVE fill is what ?opacity= tunes. Text and cover art are never faded: the
+   numbers' legibility is not negotiable (prompt §6.2). */
+:root { --panel-fill: rgba(5, 6, 10, calc(var(--card-alpha) * 0.86)); }
+
+/* --- the header bar --- */
+#head {
+  flex: 0 0 var(--head-h);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+  /* ?grad= overrides the flat accent with a header gradient + white ink (set by overlay.js);
+     without it the var() fallbacks keep the original single-accent look untouched. */
+  background: var(--head-bg, var(--accent));
+  color: var(--head-ink, #0A0B0F);       /* dark ink ON the accent — never white on orange */
+  text-shadow: var(--head-shadow, none);
+  /* 11px/.14em, not 16px/.06em: at 264px wide a 16px bold title fills the whole bar and reads
+     as the loudest thing on screen, which is wrong — the GAME ROWS are the content. Small and
+     letterspaced reads as a label, which is what a header is. */
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* --- the list --- */
+#list {
+  margin: 0;
+  padding: 0 0 4px;
+  list-style: none;
+  overflow: hidden;                      /* clips; no scrollbar on camera */
+  flex: 1 1 auto;
+}
+
+/* FLEX, deliberately not grid: the collapsed cover cell (display:none) is REMOVED from grid
+   placement, which shifted title+counter left into columns 1+2 and left the fixed counter
+   track sitting EMPTY at the right edge — every counter floated 62px into the panel (measured).
+   Flex gaps skip display:none items, so the counter is flush right on every row, with or
+   without cover art. */
+#list li {
+  display: flex;
+  align-items: center;
+  gap: var(--gutter);
+  min-height: var(--row-h);
+  padding: 0 var(--card-pad);
+  font-size: var(--t-xs);
+  font-weight: 650;
+  letter-spacing: .01em;
+  text-transform: uppercase;
+  color: var(--ink-300);
+}
+
+/* The cover cell COLLAPSES when there is no art. Reserving it on every row looked like a
+   column of empty boxes — and with no IGDB credentials configured every row is coverless, so
+   that is the common case, not the edge case. grid-template-columns starts `auto` so a
+   collapsed cell takes zero width. */
+#list .rc { display: none; }
+#list li[data-cover="yes"] .rc { display: block; width: var(--cover-w); height: calc(var(--cover-w) * 4 / 3); }
+#list .rc img { width: 100%; height: 100%; object-fit: cover; border-radius: 2px; display: block; }
+
+#list .rt {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;                 /* 70-char IGDB names exist; clamp, never clip mid-glyph */
+  -webkit-box-orient: vertical;
+  line-height: 1.12;
+}
+
+/* Flush against the right padding on EVERY row — a ragged column of numbers is the single
+   most obvious "amateur overlay" tell, and a counter floating mid-panel reads just as wrong. */
+#list .rn { flex: 0 0 auto; font-weight: 800; white-space: nowrap; text-align: right; }
+
+/* --- row states. Colour is never the ONLY signal: the N/M fraction carries the same
+       information, and done rows also get a check glyph (prompt §6.4's no-hue-alone rule
+       applies just as much to a 1080p stream at 6000kbps). --- */
+/* --ink-300, not --ink-400: the dimmer grey survives a still screenshot but not H.264 at
+   stream bitrate, where thin low-contrast text is the first thing to smear. */
+#list li[data-status="pending"]   { color: var(--ink-300); }
+#list li[data-status="done"]      { color: var(--good); }
+#list li[data-status="done"] .rn::after     { content: " ✓"; }
+#list li[data-status="skipped"]   { color: var(--serious); }
+#list li[data-status="skipped"] .rn::after  { content: " ›"; }
+#list li[data-status="abandoned"] { color: var(--critical); }
+#list li[data-status="active"] {
+  color: var(--ink-000);
+  font-weight: 800;
+  /* box-shadow inset, not a border or a background-color transition: a border would change
+     the row's box and relayout the list; this paints inside the existing box. */
+  box-shadow: inset 3px 0 0 var(--accent), inset 0 0 0 100vmax rgba(255, 255, 255, .05);
+}
+
+/* the flame: ONLY on an active row that is mid-streak. Scoped so nothing animates in any
+   other state — see §7.6's zero-animation-at-rest table. */
+#list li[data-status="active"][data-streak="hot"] .rn { color: var(--accent); }
+/* The flame is a CSS-DRAWN SHAPE, not the 🔥 emoji. An emoji is a colour-bitmap glyph, so
+   animating scale/rotate on it re-rasterises text every frame — measured at 3.16% CPU, over
+   the §7.6 budget, for one element. A plain box with a gradient promotes to its own compositor
+   layer and the transform is then a texture operation with no repaint. Same silhouette, a
+   fraction of the cost. It is also positioned ABSOLUTELY so it can never invalidate the row's
+   line box, whatever the title wraps to. */
+/* z-index:0 makes .rn a stacking context so the halo (::after, z-index:-1) stays behind the
+   flame and the numerals instead of escaping behind the row. */
+#list li[data-status="active"][data-streak="hot"] .rn { position: relative; z-index: 0; padding-left: 20px; }
+#list li[data-status="active"][data-streak="hot"] .rn::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 13px;
+  height: 17px;
+  margin-top: -9px;
+  /* A pointed silhouette, not an ellipse — an oval at this size read as an egg. clip-path is
+     STATIC here; §7.6 bans ANIMATING it, not using it. */
+  clip-path: polygon(50% 0%, 78% 30%, 76% 66%, 50% 100%, 24% 66%, 22% 30%);
+  background: linear-gradient(180deg, #FFE07A 0%, #FFB020 42%, var(--accent) 78%, #B82C08 100%);
+  transform-origin: 50% 85%;
+  will-change: transform, opacity;
+  /* FINITE, not infinite — 3 pulses (4.8s) then it holds still, warm and lit.
+     MEASURED, not assumed: LOSS_MODE with nothing animating costs 0.01% CPU; ANY continuous
+     animation costs ~3.15%, and it made no difference whether it was the 🔥 emoji or a plain
+     gradient box. The cost is running a compositor frame loop at all, so simplifying the flame
+     cannot buy anything — only stopping it can. §7.6 says the budget wins over the design, and
+     this is the simplification that obeys it: the "temperature rose" beat still plays when the
+     streak STARTS, which is the moment the audience reacts, and a loop nobody is looking at
+     any more stops costing frames. animation-fill-mode:both holds the final frame. */
+  animation: flame 1.6s ease-in-out 3 both;
+}
+
+/* The halo: a static radial glow behind the flame, so the streak reads from across the room.
+   It breathes with the same THREE finite pulses, then holds — the gradient itself never
+   animates (transform/opacity only), and at rest it is a plain painted circle costing nothing. */
+#list li[data-status="active"][data-streak="hot"] .rn::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  left: -8px;
+  top: 50%;
+  width: 30px;
+  height: 30px;
+  margin-top: -15px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(var(--accent-rgb), .55) 0%, rgba(var(--accent-rgb), 0) 68%);
+  will-change: transform, opacity;
+  animation: halo 1.6s ease-in-out 3 both;
+}
+
+/* ======================================================================================
+   3. THE TAKEOVER — SPEC §6.2's "expand momentarily, then settle back"
+
+   Same footprint, on top of the list. GAME_WON, skip, abandoned and ENDED all land here.
+   ====================================================================================== */
+
+#takeover {
+  position: absolute;
+  inset: var(--head-h) 0 0 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px 8px;
+  text-align: center;
+  background: rgba(5, 6, 10, .96);       /* near-opaque: the payoff beat must be unambiguous */
+  /* Hidden at rest with opacity + visibility, NEVER display:none — display is not animatable
+     and toggling it forces a layout pass on every beat. */
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(6px);
+}
+
+#to-cover { flex: 0 0 auto; width: 40px; height: 54px; object-fit: cover; border-radius: 3px; }
+#to-cover[hidden] { display: none; }
+/* flex-shrink:0 on the two short lines, so if space ever runs short the TITLE clamps (it is
+   the only line that can lose a word gracefully) instead of collapsing to nothing. */
+#to-word  { flex: 0 0 auto; font-size: 14px; font-weight: 900; letter-spacing: .08em; color: var(--accent); }
+/* Plain block + max-height, NOT -webkit-box/-webkit-line-clamp. As a flex item in a centred
+   column the -webkit-box display collapsed this element to 0x0 and the game title silently
+   vanished from the payoff beat — visible only by looking at a render. max-height clamps to
+   two lines with none of that fragility. */
+/* ONE line with an ellipsis, not a two-line clamp. A clamped second line was getting sliced
+   horizontally through the glyphs whenever flex shrank it by even a pixel, which reads as a
+   rendering fault; an ellipsis degrades honestly. The full title is on the list row anyway —
+   here it is secondary to GESCHAFFT and the count. */
+#to-title { flex: 0 0 auto; display: block; width: 100%; font-size: 12px; font-weight: 700;
+            color: var(--ink-100); line-height: 1.3;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#to-count { flex: 0 0 auto; font-size: 19px; font-weight: 800; color: var(--ink-000); }
+
+/* ======================================================================================
+   4. MODES (DESIGN §3). data-mode is the only switch.
+   ====================================================================================== */
+
+/* IDLE: nothing on camera. visibility is discrete and never animated, and it stops the panel
+   from eating clicks or compositing while there is no session. */
+#card[data-mode="idle"] { visibility: hidden; }
+
+/* LOSS_MODE and STREAK_MODE are the resting states: ZERO animating elements except the flame
+   glyph on a hot active row. No transition, no keyframe, no rAF, no timer. */
+
+/* The panel grows ONLY while a takeover is up, then settles back — SPEC §6.2's "may expand
+   momentarily during a transition". A permanent min-height was the wrong fix: it padded the
+   RESTING panel with dead space to reserve room for a beat that is not playing. Without any
+   floor, flexbox shrank #to-title to 0x0 and the game title silently vanished from the payoff
+   beat. This is a discrete change on a beat boundary, not an animated property: it costs one
+   reflow per game completion and keeps LayoutCount at exactly 0 at rest. */
+#card[data-mode="ended"],
+#card[data-anim="won"],
+#card[data-anim="wipe"],
+#card[data-anim="end"] { min-height: calc(var(--head-h) + 94px); }
+
+/* Hide the list WHILE the takeover is up. At rgba(.96) the rows ghosted through and read as
+   a rendering fault on camera; making the takeover fully opaque instead would turn the panel
+   into a solid black slab for 1.8s, which throws away the translucency the whole design is
+   built on. visibility is discrete — it never animates and costs no layout. */
+#card[data-mode="ended"] #list,
+#card[data-anim="won"]   #list,
+#card[data-anim="wipe"]  #list,
+#card[data-anim="end"]   #list { visibility: hidden; }
+
+#card[data-mode="ended"] #takeover,
+#card[data-anim="won"]   #takeover,
+#card[data-anim="wipe"]  #takeover,
+#card[data-anim="end"]   #takeover {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+/* ======================================================================================
+   5. MOTION (DESIGN §4). transform and opacity ONLY, in every keyframe.
+   MUST stay after §4: identical specificity, source order decides.
+   ====================================================================================== */
+
+/* will-change appears with the beat attribute and disappears when it is cleared, so no
+   compositor layer is pinned at rest (SPEC §7.6). */
+#card[data-anim] { will-change: transform; }
+#card[data-anim=""] { will-change: auto; }
+
+#card[data-anim="intro"]        { animation: card-in   400ms cubic-bezier(.2,.8,.25,1) both; }
+#card[data-anim="loss"]  #list li[data-status="active"] .rn { animation: nudge 600ms cubic-bezier(.3,1.4,.4,1) both; }
+#card[data-anim="win"]   #list li[data-status="active"] .rn { animation: pop   450ms cubic-bezier(.2,.9,.3,1) both; }
+#card[data-anim="streak-in"] #list li[data-status="active"] .rn { animation: pop 700ms cubic-bezier(.2,.9,.3,1) both; }
+#card[data-anim="streak-break"] #list li[data-status="active"] .rn { animation: drop 800ms cubic-bezier(.4,0,.6,1) both; }
+#card[data-anim="undo"]  #list { animation: rewind 250ms ease both; }
+/* GAME_WON is the payoff beat, staged like the channel's comic-sticker alerts: the panel pops
+   in springy, the cover bursts, the word drops in tilted like a badge, the count chip-pops,
+   two stars twinkle — every one FINITE and inside the 1800ms beat, transform+opacity only, so
+   the resting budget stays untouched. skip/abandoned keep the quieter neutral wipe: only a
+   win earns a celebration. */
+#card[data-anim="won"]   #takeover { animation: takeover-pop 1800ms cubic-bezier(.2,.8,.25,1) both; }
+#card[data-anim="won"]   #to-cover { animation: pop-in   480ms var(--e-land) 140ms both; }
+#card[data-anim="won"]   #to-word  { animation: badge-in 500ms var(--e-land) 300ms both; }
+#card[data-anim="won"]   #to-count { animation: chip-pop 450ms var(--e-land) 450ms both; }
+#card[data-anim="won"]   #takeover::before,
+#card[data-anim="won"]   #takeover::after {
+  content: "";
+  position: absolute;
+  background: #fff;
+  /* the alert kit's comic star, verbatim clip-path — STATIC; only transform/opacity animate */
+  clip-path: polygon(50% 0, 63% 37%, 100% 50%, 63% 63%, 50% 100%, 37% 63%, 0 50%, 37% 37%);
+  animation: twinkle 620ms ease-in-out 2 both;
+}
+#card[data-anim="won"]   #takeover::before { top: 8px;    left: 14px;  width: 15px; height: 15px; animation-delay: 280ms; }
+#card[data-anim="won"]   #takeover::after  { bottom: 10px; right: 16px; width: 10px; height: 10px; animation-delay: 460ms; }
+#card[data-anim="wipe"]  #takeover { animation: takeover  500ms ease both; }
+#card[data-anim="end"]   #takeover { animation: takeover  700ms ease both; }
+
+/* ======================================================================================
+   POSITION — ?pos=, static inset arithmetic. transform-origin follows the anchor so ?scale=
+   grows the panel INTO the frame instead of off the edge.
+   ====================================================================================== */
+html[data-pos="tl"] #card { inset: var(--edge) auto auto var(--edge); transform-origin: 0% 0%; }
+html[data-pos="tc"] #card { inset: var(--edge) auto auto calc(50% - var(--card-w) / 2); transform-origin: 50% 0%; }
+html[data-pos="tr"] #card { inset: var(--edge) var(--edge) auto auto; transform-origin: 100% 0%; }
+html[data-pos="bl"] #card { inset: auto auto var(--edge) var(--edge); transform-origin: 0% 100%; }
+html[data-pos="bc"] #card { inset: auto auto var(--edge) calc(50% - var(--card-w) / 2); transform-origin: 50% 100%; }
+html[data-pos="br"] #card { inset: auto var(--edge) var(--edge) auto; transform-origin: 100% 100%; }
+
+/* ?mono=1 — a hard fallback for a scene where the accent fights the game's palette. */
+html[data-mono="1"] { --accent: #FFFFFF; --accent-rgb: 255, 255, 255; }
+
+/* ======================================================================================
+   KEYFRAMES — transform and opacity only, in every single one.
+
+   THE TRAP: #card's resting transform is scale(var(--scale)), so any keyframe touching
+   #card's transform MUST re-declare it. At ?scale=1.6 forgetting one is a 37% size pop.
+   ====================================================================================== */
+
+/* springy sticker entrance, from the channel's alert language (pop-card): small and tilted,
+   overshoot, settle. Every frame re-declares scale(var(--scale)) — see THE TRAP above. */
+@keyframes card-in {
+  0%   { opacity: 0; transform: scale(calc(var(--scale) * .82)) translateY(10px) rotate(-2deg); }
+  62%  { opacity: 1; transform: scale(calc(var(--scale) * 1.03)) translateY(-2px) rotate(.6deg); }
+  100% { opacity: 1; transform: scale(var(--scale)) translateY(0) rotate(0deg); }
+}
+
+/* the loss increment: weighty and physical — down hard, overshoot back (DESIGN §4.4) */
+@keyframes nudge {
+  0%   { transform: translateY(0) scale(1); }
+  22%  { transform: translateY(3px) scale(1.14); }
+  60%  { transform: translateY(0) scale(.97); }
+  100% { transform: translateY(0) scale(1); }
+}
+
+/* the streak punch: up, bigger, and a comic tilt — the temperature rose */
+@keyframes pop {
+  0%   { transform: scale(1) rotate(0deg); }
+  30%  { transform: scale(1.32) rotate(-6deg); }
+  62%  { transform: scale(.96) rotate(2deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+
+/* the break: deflating. Slower out than in, and it sags BELOW the line before settling. */
+@keyframes drop {
+  0%   { transform: translateY(0) scale(1.18); opacity: 1; }
+  45%  { transform: translateY(5px) scale(.9); opacity: .55; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+/* undo moves the OTHER way. That inversion is the whole visual message. */
+@keyframes rewind {
+  0%   { transform: translateX(0); opacity: 1; }
+  40%  { transform: translateX(5px); opacity: .6; }
+  100% { transform: translateX(0); opacity: 1; }
+}
+
+/* the takeover: in fast, hold, out. The hold is most of the duration — the beat is meant to
+   be READ, and stillness is what makes it readable on a compressed stream. */
+@keyframes takeover {
+  0%   { opacity: 0; transform: translateY(8px) scale(.97); }
+  12%  { opacity: 1; transform: translateY(0) scale(1); }
+  84%  { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-4px) scale(1); }
+}
+
+/* the WON takeover: the sticker-pop entrance (alert pop-card, scaled into 1800ms), the same
+   long readable hold, the same quiet exit. */
+@keyframes takeover-pop {
+  0%   { opacity: 0; transform: scale(.55) rotate(-5deg); }
+  12%  { opacity: 1; transform: scale(1.06) rotate(1.5deg); }
+  18%  { transform: scale(.97) rotate(-.6deg); }
+  24%  { transform: scale(1) rotate(0deg); }
+  84%  { opacity: 1; transform: scale(1) rotate(0deg); }
+  100% { opacity: 0; transform: translateY(-4px) scale(1) rotate(0deg); }
+}
+
+/* the alert kit's supporting cast, all finite, all inside the won beat */
+@keyframes pop-in {
+  0%   { opacity: 0; transform: scale(0) rotate(-8deg); }
+  70%  { opacity: 1; transform: scale(1.16) rotate(2deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+@keyframes badge-in {
+  0%   { opacity: 0; transform: translateY(-24px) rotate(-14deg) scale(.4); }
+  70%  { opacity: 1; transform: translateY(3px) rotate(-4deg) scale(1.1); }
+  100% { opacity: 1; transform: translateY(0) rotate(-2deg) scale(1); }
+}
+@keyframes chip-pop {
+  0%   { opacity: 0; transform: scale(0) rotate(-2deg); }
+  70%  { opacity: 1; transform: scale(1.22) rotate(1deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+@keyframes twinkle {
+  0%, 100% { opacity: 0; transform: scale(.4) rotate(0deg); }
+  50%      { opacity: 1; transform: scale(1.1) rotate(24deg); }
+}
+
+/* THE FLAME (DESIGN §5) — the one thing allowed to move at rest, one element, one keyframe,
+   transform + opacity only. No filter, no blur, no box-shadow, no background-position. */
+@keyframes flame {
+  0%   { transform: translateY(0) scale(1) rotate(-2deg);   opacity: .92; }
+  28%  { transform: translateY(-1.5px) scale(1.1) rotate(3deg); opacity: 1; }
+  55%  { transform: translateY(.5px) scale(.95) rotate(-3deg);  opacity: .86; }
+  78%  { transform: translateY(-1px) scale(1.06) rotate(2deg);  opacity: 1; }
+  100% { transform: translateY(0) scale(1) rotate(-2deg);   opacity: .92; }
+}
+
+/* the halo breathes with the flame's three pulses, then holds lit */
+@keyframes halo {
+  0%   { opacity: .7;  transform: scale(.9); }
+  50%  { opacity: 1;   transform: scale(1.12); }
+  100% { opacity: .85; transform: scale(1); }
+}
+
+/* ======================================================================================
+   RECAP — shared surface (SPEC §7.7 / DESIGN §1.4, §8.2). recap.html links this file and has
+   no stylesheet of its own; its figure CSS belongs below this marker.
+   ====================================================================================== */
+.viz-table,
+.viz-axis { font-variant-numeric: tabular-nums; }
+/* the standalone display numbers: proportional, because tabular gives '121' the width of
+   '000' and it reads loose at 42px+ (DESIGN §8.2) */
+.kpi-value,
+.hero-figure { font-variant-numeric: normal; }

@@ -1,0 +1,15 @@
+{
+  "data": {
+    "fundraiser": {
+      "fundName": "Beispiel-Spendenaktion für einen guten Zweck ❤️",
+      "goalAmount": {
+        "amount": 2800,
+        "currencyCode": "EUR"
+      },
+      "currentAmount": {
+        "amount": 475,
+        "currencyCode": "EUR"
+      }
+    }
+  }
+}

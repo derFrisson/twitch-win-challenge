@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="robots" content="noindex" />
+  <!-- IN THE HEAD, never at the end of the body (SPEC 7.1): Chromium blocks rendering of what
+       FOLLOWS an in-body stylesheet, so a body-end <link> paints the raw DOM as default black
+       text for a frame. Same treatment as overlay.html and recap.html. -->
+  <link rel="stylesheet" href="/admin/admin.css" />
+  <title>Win-Challenge</title>
+</head>
+<body data-phase="idle" data-conn="down">
+
+<!-- ============================ 8.1 live readout (sticky) ============================ -->
+<!-- Every visible word is written by admin.js from /strings.js (SPEC 1.1). data-s = textContent,
+     data-sp = placeholder, data-sl = aria-label. This file contains no user-facing copy. -->
+<div id="topbar">
+<header id="live-readout">
+  <div id="status-rule" aria-hidden="true"></div>
+
+  <div class="rd-line">
+    <span id="live-pill" class="pill"><span class="dot" aria-hidden="true"></span><span id="live-pill-text"></span></span>
+    <img id="rd-cover" class="rd-cover" alt="" hidden />
+    <span id="rd-meta" class="rd-meta"></span>
+    <nav id="nav">
+      <a href="/admin/" aria-current="page" data-s="navRun"></a>
+      <a href="/admin/timer/" data-s="navTimer"></a>
+      <button id="btn-lang" class="lang" type="button" data-st="tipLang"></button>
+    </nav>
+  </div>
+
+  <div id="rd-title" class="rd-title"></div>
+
+  <div class="counters" id="rd-counters">
+    <div class="ctr"><span class="ctr-v" id="ctr-losses">—</span><span class="ctr-l" data-s="lossesLabel"></span></div>
+    <div class="ctr"><span class="ctr-v" id="ctr-streak">—</span><span class="ctr-l" data-s="streakLabel"></span></div>
+    <div class="ctr"><span class="ctr-v" id="ctr-attempts">—</span><span class="ctr-l" data-s="attemptsLabel"></span></div>
+  </div>
+
+  <!-- Occupies the counters' slot for 2.5s on a 409 / a failed fetch (DESIGN 6.5). -->
+  <p id="rd-msg" class="rd-msg" role="status" aria-live="polite"></p>
+</header>
+
+<!-- ============================ 8.1 action bar (fixed bottom on phones) ============================
+     DOM order is WIN/LOSS then UNDO/SKIP for a sane tab order; CSS column-reverse puts the
+     secondary row ABOVE the primaries so an upward thumb slip from LOSS lands on SKIP, never on
+     UNDO (DESIGN 6.2). -->
+<div id="live-actions">
+  <div class="act-row">
+    <button id="btn-win" class="act act-win" type="button" data-s="win" data-st="tipWin"></button>
+    <button id="btn-loss" class="act act-loss" type="button" data-s="loss" data-st="tipLoss"></button>
+  </div>
+  <div class="act-row">
+    <button id="btn-undo" class="act" type="button" data-st="tipUndo"></button>
+    <span class="deadzone" aria-hidden="true"></span>
+    <button id="btn-skip" class="act act-skip" type="button" data-s="skip" data-st="tipSkip"></button>
+  </div>
+  <button id="btn-session" class="act act-session" type="button" data-st="tipSessionBtn"></button>
+</div>
+</div>
+
+<main id="page">
+
+  <!-- ============================ 8.7 resume ============================ -->
+  <section id="resume" class="banner" hidden>
+    <p id="resume-text" class="banner-text"></p>
+    <button id="btn-resume" class="btn btn-good" type="button" data-s="resumeSession" data-st="tipResume"></button>
+    <p id="resume-msg" class="msg"></p>
+  </section>
+
+  <!-- Two independent columns (see admin.css #page): folding a section must never move the
+       other column. -->
+  <div class="col">
+
+  <!-- ============================ 8.3 session builder ============================ -->
+  <details id="sec-builder" class="sec" open>
+    <summary class="sec-head">
+      <span class="sec-title" data-s="secBuilder"></span>
+      <span id="builder-chip" class="chip"></span>
+      <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5" /></svg>
+    </summary>
+    <div class="sec-body">
+      <label class="fld">
+        <span class="fld-lab" data-s="sessionPick"></span>
+        <select id="sess-pick" data-st="tipSessPick"></select>
+      </label>
+      <!-- One row: the primary action leads, the destructive ones trail. -->
+      <div class="fld-row">
+        <button id="btn-start" class="btn btn-good btn-lead" type="button" data-s="startSession" data-st="tipStart"></button>
+        <button id="btn-end" class="btn btn-danger-out" type="button" data-s="endSession" data-st="tipEnd" hidden></button>
+        <button id="btn-del-session" class="btn btn-danger-out" type="button" data-s="deleteSession" data-st="tipDelSession"></button>
+      </div>
+
+      <form id="sess-new" class="fld-row">
+        <label class="fld">
+          <span class="fld-lab" data-s="newSession"></span>
+          <input id="sess-title" type="text" maxlength="80" required autocomplete="off" data-st="tipSessTitle" />
+        </label>
+        <label class="latch latch-inline" data-st="tipLoopNew">
+          <span class="latch-lab" data-s="loopLabel"></span>
+          <input id="sess-loop-new" type="checkbox" class="sw" role="switch" />
+        </label>
+        <button class="btn" type="submit" data-s="create" data-st="tipCreateSession"></button>
+      </form>
+
+      <label class="latch" data-st="tipLoopEdit">
+        <span class="latch-lab" data-s="loopEditLabel"></span>
+        <input id="sw-loop" type="checkbox" class="sw" role="switch" />
+      </label>
+
+      <ol id="sg-list" class="sg-list"></ol>
+      <p id="sg-empty" class="note" data-s="noGamesYet" hidden></p>
+      <p id="sg-note" class="note" data-s="insertNote" hidden></p>
+
+      <div class="fld-row">
+        <label class="fld">
+          <span class="fld-lab" data-s="addToSession"></span>
+          <select id="sg-add-pick"></select>
+        </label>
+        <button id="sg-add" class="btn" type="button" data-s="addGame" data-st="tipAddGame"></button>
+      </div>
+
+      <p id="builder-msg" class="msg"></p>
+    </div>
+  </details>
+
+  <!-- ============================ 8.4 loop control ============================ -->
+  <details id="sec-loop" class="sec">
+    <summary class="sec-head">
+      <span class="sec-title" data-s="secLoop"></span>
+      <span id="loop-chip" class="chip chip-warn" hidden data-s="armed"></span>
+      <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5" /></svg>
+    </summary>
+    <div class="sec-body" id="loop-body">
+      <label class="latch latch-arm" data-st="tipStopAfter">
+        <span class="latch-txt">
+          <span class="latch-lab" data-s="stopAfterCurrent"></span>
+          <span id="latch-sub" class="latch-sub"></span>
+        </span>
+        <input id="sw-stop-after" type="checkbox" class="sw" role="switch" />
+      </label>
+      <button id="btn-stop-now" class="btn btn-danger-out" type="button" data-s="stopNow" data-st="tipStopNow"></button>
+      <p id="loop-msg" class="msg"></p>
+    </div>
+  </details>
+
+  </div><!-- /.col: session operation -->
+  <div class="col"><!-- content + output -->
+
+  <!-- ============================ 8.2 game library ============================ -->
+  <details id="sec-library" class="sec">
+    <summary class="sec-head">
+      <span class="sec-title" data-s="secLibrary"></span>
+      <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5" /></svg>
+    </summary>
+    <div class="sec-body">
+      <div id="lib-grid" class="tiles"></div>
+
+      <div id="add-panel" hidden>
+        <!-- Governs BOTH the IGDB picks below and the manual form: one control, one meaning.
+             It sits above the search because the mode has to be chosen before the click that
+             creates the game, not hunted down afterwards on a library tile. -->
+        <label class="fld">
+          <span class="fld-lab" data-s="newGameMode"></span>
+          <select id="new-mode" data-st="tipNewMode">
+            <option value="single" data-s="modeSingle"></option>
+            <option value="b2b" data-s="modeB2b"></option>
+          </select>
+        </label>
+        <label class="fld">
+          <span class="fld-lab" data-s="igdbSearch"></span>
+          <input id="igdb-q" type="search" autocomplete="off" enterkeyhint="search" data-st="tipIgdbQ" />
+        </label>
+        <p id="igdb-msg" class="msg"></p>
+        <div id="igdb-results" class="tiles"></div>
+      </div>
+
+      <!-- ALWAYS rendered, never behind a disclosure: IGDB is a convenience, never a hard
+           dependency (BUILD_PROMPT 8 / DESIGN 6.6). -->
+      <form id="manual-form" class="manual">
+        <h3 class="sec-sub" data-s="manualTitle"></h3>
+        <label class="fld">
+          <span class="fld-lab" data-s="manualName"></span>
+          <input id="man-name" type="text" maxlength="80" required autocomplete="off" />
+        </label>
+        <label class="fld">
+          <span class="fld-lab" data-s="manualCover"></span>
+          <input id="man-cover" type="file" accept="image/jpeg,image/png,image/webp" data-st="tipCoverFile" />
+        </label>
+        <button class="btn" type="submit" data-s="create"></button>
+        <p id="manual-msg" class="msg"></p>
+      </form>
+    </div>
+  </details>
+
+  <!-- ============================ 8.5 overlay URLs + live preview ============================ -->
+  <details id="sec-urls" class="sec">
+    <summary class="sec-head">
+      <span class="sec-title" data-s="secUrls"></span>
+      <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5" /></svg>
+    </summary>
+    <div class="sec-body">
+      <p class="note" data-s="urlsIntro"></p>
+      <div id="url-rows" class="copy-rows"></div>
+
+      <p class="note note-warn" data-s="rotateWarn"></p>
+      <div class="fld-row">
+        <button id="rot-overlay" class="btn btn-danger-out" type="button" data-s="rotateOverlay" data-st="tipRotOverlay"></button>
+        <button id="rot-control" class="btn btn-danger-out" type="button" data-s="rotateControl" data-st="tipRotControl"></button>
+      </div>
+
+      <h3 class="sec-sub" data-s="streamdeckTitle"></h3>
+      <div id="sd-rows" class="copy-rows"></div>
+
+      <h3 class="sec-sub" data-s="previewTitle"></h3>
+      <div class="prev-ctl">
+        <label class="fld">
+          <span class="fld-lab"><span data-s="pScale"></span> <output id="out-scale" class="out"></output></span>
+          <input id="p-scale" type="range" min="0.5" max="2" step="0.05" value="1" data-st="tipScale" />
+        </label>
+        <label class="fld">
+          <span class="fld-lab"><span data-s="pOpacity"></span> <output id="out-opacity" class="out"></output></span>
+          <input id="p-opacity" type="range" min="0.3" max="1" step="0.01" value="0.85" data-st="tipOpacity" />
+        </label>
+        <label class="fld">
+          <span class="fld-lab" data-s="pAccent"></span>
+          <input id="p-accent" type="color" value="#ff5a1f" data-st="tipAccent" />
+        </label>
+        <label class="fld">
+          <span class="fld-lab" data-s="pPos"></span>
+          <select id="p-pos" data-st="tipPos">
+            <option value="tl" data-s="posTL"></option><option value="tc" data-s="posTC"></option><option value="tr" data-s="posTR"></option>
+            <option value="bl" selected data-s="posBL"></option><option value="bc" data-s="posBC"></option><option value="br" data-s="posBR"></option>
+          </select>
+        </label>
+        <label class="latch latch-inline" data-st="tipGradOn">
+          <span class="latch-lab" data-s="pGradOn"></span>
+          <input id="p-grad-on" type="checkbox" class="sw" role="switch" />
+        </label>
+        <label class="fld">
+          <span class="fld-lab" data-s="pGradA"></span>
+          <input id="p-grad-a" type="color" value="#d8405c" />
+        </label>
+        <label class="fld">
+          <span class="fld-lab" data-s="pGradB"></span>
+          <input id="p-grad-b" type="color" value="#e58ba4" />
+        </label>
+        <label class="fld">
+          <span class="fld-lab" data-s="pGradC"></span>
+          <input id="p-grad-c" type="color" value="#5b93db" />
+        </label>
+      </div>
+      <div class="checker">
+        <iframe id="preview" title="" width="560" height="200" referrerpolicy="same-origin"></iframe>
+      </div>
+      <p id="preview-idle" class="note" data-s="previewIdleNote" hidden></p>
+      <p id="urls-msg" class="msg"></p>
+    </div>
+  </details>
+
+  <!-- ============================ 8.6 history ============================ -->
+  <details id="sec-history" class="sec">
+    <summary class="sec-head">
+      <span class="sec-title" data-s="secHistory"></span>
+      <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5" /></svg>
+    </summary>
+    <div class="sec-body">
+      <div id="hist-list" class="hist"></div>
+      <p id="hist-msg" class="msg"></p>
+    </div>
+  </details>
+
+  </div><!-- /.col -->
+
+</main>
+
+
+<script type="module" src="/admin/admin.js"></script>
+</body>
+</html>

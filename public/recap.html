@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <!-- IN THE HEAD, not at the end of the body (SPEC §7.1): a body-end stylesheet paints the raw
+       unstyled DOM for a frame on every OBS source refresh / scene activation. -->
+  <title>Recap</title>
+  <link rel="stylesheet" href="/overlay.css" />
+</head>
+<body>
+  <!-- recap.js builds everything inside this element from recap.json (SPEC §7.7). There is no
+       fixed DOM skeleton here (unlike overlay.html): the content is inherently variable-length
+       (one row per game played, one column per round), and recap.js runs once per page load,
+       not once per WS tick, so ordinary DOM construction carries none of the overlay's
+       continuous-animation CPU cost (SPEC §7.6). -->
+  <div id="recap-root"></div>
+
+  <script type="module" src="/recap.js"></script>
+</body>
+</html>

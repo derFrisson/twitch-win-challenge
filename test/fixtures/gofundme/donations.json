@@ -1,0 +1,88 @@
+{
+  "data": {
+    "fundraiser": {
+      "donationCount": 7,
+      "donations": {
+        "edges": [
+          {
+            "node": {
+              "id": "9000000001",
+              "name": "Spender A",
+              "createdAt": "2026-08-13T14:54:28.000-05:00",
+              "amount": {
+                "amount": 25.0,
+                "currencyCode": "EUR"
+              }
+            }
+          },
+          {
+            "node": {
+              "id": "9000000002",
+              "name": "Der Streamer",
+              "createdAt": "2026-08-17T09:34:54.000-05:00",
+              "amount": {
+                "amount": 200.0,
+                "currencyCode": "EUR"
+              }
+            }
+          },
+          {
+            "node": {
+              "id": "9000000003",
+              "name": "Spender B",
+              "createdAt": "2026-08-17T13:37:28.000-05:00",
+              "amount": {
+                "amount": 25.0,
+                "currencyCode": "EUR"
+              }
+            }
+          },
+          {
+            "node": {
+              "id": "9000000004",
+              "name": "Spender C",
+              "createdAt": "2026-08-17T13:53:19.000-05:00",
+              "amount": {
+                "amount": 5.0,
+                "currencyCode": "EUR"
+              }
+            }
+          },
+          {
+            "node": {
+              "id": "9000000005",
+              "name": "Spender D",
+              "createdAt": "2026-08-17T14:13:19.000-05:00",
+              "amount": {
+                "amount": 50.0,
+                "currencyCode": "EUR"
+              }
+            }
+          },
+          {
+            "node": {
+              "id": "9000000006",
+              "name": "Spender E",
+              "createdAt": "2026-08-19T12:28:59.000-05:00",
+              "amount": {
+                "amount": 150.0,
+                "currencyCode": "EUR"
+              }
+            }
+          },
+          {
+            "node": {
+              "id": "9000000007",
+              "name": "Spender F",
+              "createdAt": "2026-08-20T05:31:25.000-05:00",
+              "amount": {
+                "amount": 20.0,
+                "currencyCode": "EUR"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

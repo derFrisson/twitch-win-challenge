@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Win-Challenge Overlay</title>
+  <!-- IN THE HEAD, not at the end of the body: Chromium blocks rendering of what FOLLOWS an
+       in-body stylesheet, so a body-end <link> paints the raw DOM as default black text over
+       live gameplay for a frame or more on every OBS source refresh and every scene activation.
+       Absolute hrefs everywhere: this page is served at /o/<token>, where a relative path would
+       resolve against /o/ (SPEC §5.1). -->
+  <link rel="preload" href="/fonts/inter-var-latin.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="stylesheet" href="/overlay.css" />
+</head>
+<body>
+  <!-- OVERLAY V2 — the compact playlist. The whole lap is on screen, one row per game, so the
+       audience always sees what is coming next (the single biggest gap against the commercial
+       tool). data-mode drives everything via CSS: idle | loss | streak | ended.
+       data-anim is set for the duration of one beat:
+       intro | win | streak-in | streak-break | loss | won | wipe | end | undo (DESIGN §4.1). -->
+  <div id="card" data-mode="idle" data-anim="">
+    <div id="head"><span id="head-text"></span></div>
+
+    <!-- Rows are built by overlay.js from RunState.playlist. One <li> per game, never
+         re-created on a counter change — only its text and data-status are rewritten, so a
+         loss costs one textContent write and no layout of the other rows. -->
+    <ul id="list"></ul>
+
+    <!-- The momentary takeover: GAME_WON / skip / abandoned / ENDED all land here. It sits on
+         top of the list inside the SAME footprint (SPEC §6.2 "may expand momentarily during a
+         transition, then settle back"), so the resting size never changes and nothing below the
+         overlay reflows. Hidden at rest via opacity + visibility, never display:none, so its
+         transform stays composited instead of relayouting on every beat. -->
+    <div id="takeover" aria-hidden="true">
+      <img id="to-cover" alt="" />
+      <div id="to-word"></div>
+      <div id="to-title"></div>
+      <div id="to-count"></div>
+    </div>
+  </div>
+
+  <audio id="sfx-streak" preload="none" src="/sfx/streak-start.ogg"></audio>
+  <audio id="sfx-break"  preload="none" src="/sfx/streak-break.ogg"></audio>
+  <audio id="sfx-won"    preload="none" src="/sfx/game-won.ogg"></audio>
+
+  <script type="module" src="/overlay.js"></script>
+</body>
+</html>

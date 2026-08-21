@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "es2022",
+    "moduleResolution": "bundler",
+    "lib": ["es2022"],
+    "types": ["./worker-configuration.d.ts", "node"],
+    "allowImportingTsExtensions": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    // `npm test` runs src/ through Node's type stripping, which only ERASES annotations —
+    // it cannot emit code. Without this, non-erasable syntax (enums, namespaces,
+    // constructor parameter properties) typechecks clean and then throws
+    // ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX at test time. This moves that into `npm run typecheck`.
+    "erasableSyntaxOnly": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts"]
+}

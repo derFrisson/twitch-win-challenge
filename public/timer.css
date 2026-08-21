@@ -1,0 +1,155 @@
+/* timer.css — the subathon clock (feature prompt §6). Tokens come from overlay.css, which is
+   linked first; this file only adds what is specific to the clock.
+
+   THE HOUSE RULE, unchanged from overlay.css: animate `transform` and `opacity`. Nothing else.
+   This widget is on camera for 40+ hours straight, so it also must not strobe, must not pulse,
+   and must not grow a compositor layer it never releases. */
+
+body {
+  margin: 0;
+  background: transparent;          /* OBS composites this; never paint a page background */
+  font-family: 'Inter', system-ui, sans-serif;
+  overflow: hidden;
+}
+
+#clock {
+  position: absolute;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 18px 26px 16px;
+  border-radius: 18px;
+  background: rgba(16, 18, 24, var(--fill-a, .85));
+  box-shadow: 0 2px 24px rgba(0, 0, 0, .45);
+  transform: scale(var(--scale, 1));
+  transform-origin: var(--origin, left bottom);
+}
+
+/* ?pos — the six anchors SPEC 7.5 already defines for the win-challenge widget. */
+#clock[data-pos="tl"] { top: 0; left: 0; --origin: left top; }
+#clock[data-pos="tc"] { top: 0; left: 50%; margin-left: -0.001px; --origin: center top; }
+#clock[data-pos="tr"] { top: 0; right: 0; --origin: right top; }
+#clock[data-pos="bl"] { bottom: 0; left: 0; --origin: left bottom; }
+#clock[data-pos="bc"] { bottom: 0; left: 50%; --origin: center bottom; }
+#clock[data-pos="br"] { bottom: 0; right: 0; --origin: right bottom; }
+
+/* THE HERO. `contain` is what keeps a once-a-second text change from relayouting the document:
+   the digits are tabular so the box never resizes, and containment stops the browser looking. */
+#hms {
+  contain: layout style;
+  font-size: 68px;
+  font-weight: 800;
+  letter-spacing: -.02em;
+  line-height: 1.02;
+  color: var(--ink-000);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, .55);
+}
+
+#sub {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: var(--t-sm);
+  font-weight: 600;
+  color: var(--ink-200);
+}
+#endline:empty, #statetag:empty { display: none; }
+
+#statetag {
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+/* PAUSED: unmistakable but calm. A fill and a word — no pulse, no blink. It sits on screen for
+   six hours while he sleeps, so anything animated here is burn-in and wasted CPU. */
+#clock[data-mode="paused"] #statetag { background: var(--warning); color: #101218; }
+#clock[data-mode="paused"] #hms { color: var(--ink-200); }
+#clock[data-mode="capped"] #statetag { background: var(--accent); color: #fff; }
+#clock[data-mode="ended"] #hms { color: var(--ink-300); }
+
+/* The connection tell: a hairline, not a banner. Absent = fine, amber = the socket is down and
+   the number on screen is going stale. */
+#clock::after {
+  content: '';
+  position: absolute; left: 0; right: 0; bottom: 0; height: 3px;
+  border-radius: 0 0 18px 18px;
+  background: var(--warning);
+  opacity: 0;
+  transition: opacity 240ms ease-out;
+}
+#clock[data-conn="down"]::after { opacity: 1; }
+
+/* §6.2 THE PAYOFF: the delta flies up and fades. transform + opacity only, 1200ms, and
+   `will-change` is added by JS at the start and removed on completion — a permanent one pins a
+   compositor layer for 40 hours to animate something that happens twice an evening. */
+#delta {
+  position: absolute;
+  top: 6px; left: 26px;
+  font-size: 26px; font-weight: 800;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  opacity: 0;
+  transform: translateY(6px);
+  pointer-events: none;
+}
+#delta[data-run] { animation: delta-rise 1200ms cubic-bezier(.16,.84,.44,1) forwards; }
+@keyframes delta-rise {
+  0%   { opacity: 0; transform: translateY(10px) scale(.94); }
+  18%  { opacity: 1; transform: translateY(0) scale(1.06); }
+  34%  { opacity: 1; transform: translateY(0) scale(1); }
+  78%  { opacity: 1; transform: translateY(-6px); }
+  100% { opacity: 0; transform: translateY(-16px); }
+}
+
+/* The clock itself acknowledges the jump with one short lift. Deliberately small: the number is
+   the message, and a big bounce on a 40-hour graphic gets old by hour two. */
+#hms[data-bump] { animation: hms-bump 520ms cubic-bezier(.16,.84,.44,1); }
+@keyframes hms-bump {
+  0%   { transform: scale(1); }
+  30%  { transform: scale(1.045); }
+  100% { transform: scale(1); }
+}
+
+/* §6.3 donation toast — queued by JS, one at a time. */
+#toast {
+  display: flex; gap: 8px; align-items: baseline;
+  margin-top: 8px;
+  font-size: var(--t-sm); font-weight: 700;
+  color: var(--ink-100);
+  opacity: 0;
+  transform: translateY(4px);
+  pointer-events: none;
+}
+#toast[data-run] { animation: toast-in 4200ms cubic-bezier(.16,.84,.44,1) forwards; }
+@keyframes toast-in {
+  0%   { opacity: 0; transform: translateY(8px); }
+  6%   { opacity: 1; transform: translateY(0); }
+  88%  { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-6px); }
+}
+#toast-amt { color: var(--accent); }
+#toast-time { color: var(--ink-300); font-weight: 600; }
+
+/* §6.4 goal bar — scaleX only, never a width transition. */
+#goal { width: 100%; margin-top: 10px; }
+#goal-track { height: 8px; border-radius: 4px; background: var(--ink-700); overflow: hidden; }
+#goal-fill {
+  height: 8px; border-radius: 4px; background: var(--accent);
+  transform-origin: 0 50%; transform: scaleX(0);
+  transition: transform 600ms cubic-bezier(.16,.84,.44,1);
+}
+#goal-text { margin-top: 4px; font-size: var(--t-xs); font-weight: 600; color: var(--ink-300);
+             font-variant-numeric: tabular-nums; }
+
+/* An OBS browser source has no reduced-motion preference to express, but a human previewing
+   this in a normal browser does. Costs one rule. */
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}

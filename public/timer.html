@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="robots" content="noindex" />
+  <!-- IN THE HEAD, never at the end of the body (SPEC 7.1): a body-end <link> paints the raw
+       DOM for a frame. overlay.css first — it owns the shared token block, so timer.css only
+       carries what is specific to the clock and nothing is duplicated. -->
+  <link rel="stylesheet" href="/overlay.css" />
+  <link rel="stylesheet" href="/timer.css" />
+  <title>Stream-Zeit</title>
+</head>
+<body>
+
+<div id="clock" data-mode="idle" data-conn="down">
+  <!-- The hero. tabular-nums + `contain` so a per-second text change cannot relayout anything
+       outside this element (feature prompt §6.5). -->
+  <div id="hms" role="timer" aria-live="off">0:00:00</div>
+
+  <div id="sub">
+    <span id="endline"></span>
+    <span id="statetag"></span>
+  </div>
+
+  <!-- §6.2: the payoff. Absolutely positioned so it cannot displace the clock when it appears. -->
+  <div id="delta" aria-hidden="true"></div>
+
+  <!-- §6.4: off unless ?goal=1. The streamer already runs GoFundMe's own bar; this exists so he
+       can switch to a matching look later without new work. -->
+  <div id="goal" hidden>
+    <div id="goal-track"><div id="goal-fill"></div></div>
+    <div id="goal-text"></div>
+  </div>
+
+  <!-- §6.3: one at a time, queued, never stomped. -->
+  <div id="toast" aria-hidden="true"><span id="toast-who"></span><span id="toast-amt"></span><span id="toast-time"></span></div>
+</div>
+
+<script type="module" src="/timer.js"></script>
+</body>
+</html>

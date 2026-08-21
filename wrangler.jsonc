@@ -1,0 +1,78 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "twitch-win-challenge",
+  "main": "src/index.ts",
+
+  // EDIT ME (1/3): your Cloudflare account id — dashboard → Workers & Pages → right sidebar,
+  // or `wrangler whoami`. Pinning it here keeps `wrangler deploy` from asking interactively.
+  "account_id": "YOUR_CLOUDFLARE_ACCOUNT_ID",
+
+  // The newest date this installed wrangler/workerd accepts (it tracks the real clock and
+  // rejects any future date). Must stay >= 2026-04-07 so web_socket_auto_reply_to_close is on
+  // by default — that is why webSocketClose() does not call ws.close() itself.
+  // nodejs_compat is implied for dates >= 2026-08-04, and jose does not need it anyway,
+  // so there are deliberately NO compatibility_flags.
+  "compatibility_date": "2026-08-20",
+
+  // EDIT ME (2/3): the hostname you will serve this on — a zone on your Cloudflare account.
+  // workers_dev stays off: an open *.workers.dev hostname would route around the Cloudflare
+  // Access application in front of /admin, so the custom domain is the only way in.
+  "routes": [{ "pattern": "stream-tool.YOUR-DOMAIN.example", "custom_domain": true }],
+  "workers_dev": false,
+  // Versioned preview URLs are also *.workers.dev hostnames the Access application does not
+  // cover. The Worker's own JWT check still answers 401 there (defense in depth), but there is
+  // no reason for those hostnames to exist at all.
+  "preview_urls": false,
+
+  // Required: `define` alone leaves `if (false) { ...'dev@localhost'... }` physically in the
+  // bundle. minify is what actually eliminates it. See SPEC 6.2.
+  "minify": true,
+  // The VALUE is raw source text handed to esbuild, not an implicitly quoted string.
+  // `wrangler dev` overrides this with --define __DEV__:true (CLI beats config).
+  "define": { "__DEV__": "false" },
+
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "not_found_handling": "none",
+    "html_handling": "auto-trailing-slash",
+    // Only these five prefixes invoke the Worker. Everything else (js/css/woff2/ogg) is served
+    // straight from the asset store with zero Worker invocation — the overlay's CPU budget and
+    // the cost model both depend on this. Patterns MUST start with '/' or '!/'.
+    "run_worker_first": ["/api/*", "/o/*", "/c/*", "/admin/*", "/covers/*"]
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "twitch-win-challenge-db",
+      "database_id": "YOUR_D1_DATABASE_ID",   // EDIT ME (3/3): from `wrangler d1 create twitch-win-challenge-db`
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  "r2_buckets": [{ "binding": "COVERS", "bucket_name": "twitch-win-challenge-covers" }],
+
+  "durable_objects": {
+    "bindings": [
+      { "name": "LIVE_RUN", "class_name": "LiveRun" },
+      // A SECOND object, not a corner of LiveRun: the clock is a separate tool (feature prompt
+      // G.6). Its 15s GoFundMe alarm would otherwise hold the win-challenge object awake for
+      // something it has nothing to do with, and the two have separate state and lifecycles.
+      { "name": "TIMER_RUN", "class_name": "TimerRun" }
+    ]
+  },
+
+  // Declarative lifecycle (2026-06-30+). "sqlite" is the only valid storage for a new
+  // namespace and the backend is IMMUTABLE once provisioned — getting this wrong means
+  // delete-and-reprovision with full data loss.
+  // `exports` and `migrations` are mutually exclusive; a config with both is rejected.
+  // Fallback if this wrangler build rejects `exports`, use ONLY this instead:
+  //   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["LiveRun"] }]
+  "exports": {
+    "LiveRun": { "type": "durable-object", "storage": "sqlite" },
+    "TimerRun": { "type": "durable-object", "storage": "sqlite" }
+  },
+
+  "observability": { "enabled": true, "head_sampling_rate": 1 }
+}

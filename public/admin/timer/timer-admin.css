@@ -1,0 +1,35 @@
+/* timer-admin.css — only what /admin/admin.css does not already provide. Desktop-only, one
+   layout: there is no phone branch anywhere in this project (feature prompt G.7). */
+
+/* Independent flex columns, same reasoning as admin.css: shared grid rows turned every
+   folded section into dead space as tall as its open neighbour. */
+#page { display: flex; flex-wrap: wrap; gap: var(--s-4); align-items: flex-start; }
+#banner { flex: 1 1 100%; }
+.col { flex: 1 1 420px; min-width: 0; display: flex; flex-direction: column; gap: var(--s-4); }
+
+.banner-warn { border-color: var(--warning); }
+.banner-bad  { border-color: var(--critical); }
+
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-3); }
+.row { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; margin-top: var(--s-3); }
+
+/* Tabular so a column of money does not jitter as it updates. */
+.tbl { width: 100%; margin-top: var(--s-3); border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.tbl th { text-align: left; font-size: var(--t-xs); font-weight: 600; color: var(--ink-300);
+          padding: 0 var(--s-2) var(--s-2) 0; }
+.tbl td { padding: var(--s-2) var(--s-2) var(--s-2) 0; border-top: 2px solid var(--ink-800);
+          font-size: var(--t-sm); }
+.tbl td.num { text-align: right; font-weight: 700; }
+.tbl tr[data-excluded="1"] td { color: var(--ink-400); }
+
+.chip-live { background: var(--good); color: #fff; }
+.chip-off  { background: var(--ink-700); color: var(--ink-200); }
+
+/* The clock in the readout: the number a human checks from across the room. */
+#rd-title { font-variant-numeric: tabular-nums; font-size: var(--t-2xl); font-weight: 800; }
+
+/* Six stats do not fit one row at 1280 next to the action buttons. Wrap them, and never let a
+   value break across lines — "39.5 h" splitting after the number reads as a bug. */
+#stats { flex-wrap: wrap; gap: var(--s-3) var(--s-4); }
+#stats .ctr-v { white-space: nowrap; font-size: var(--t-lg); }
+#stats .ctr { min-width: 0; }

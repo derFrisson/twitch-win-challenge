@@ -1,0 +1,588 @@
+/* admin.css — the Operate surface (DESIGN 6). Desktop-only, one layout: DESIGN 6.1's second,
+   phone-specific layout was deleted — the panel is not operated from a phone.
+   ponytail: hand-written CSS, no build step, no framework (SPEC 1). Tokens are duplicated from
+   overlay.css between the markers below, byte-identically, on purpose — see the block comment. */
+
+/* ============================== TOKENS-BEGIN ==============================
+   Shared by overlay.css and admin/admin.css. Byte-identical in both files.
+   ponytail: duplicated, not imported. The §1 file tree has no tokens.css, and an
+   @import would add a render-blocking request in front of the overlay's first paint
+   — on camera, on every OBS source refresh. 40 literal lines is the cheaper copy.
+   Ceiling: if a third surface appears, add public/tokens.css and link it from all three.
+   Drift check (must print nothing):
+     diff <(sed -n '/TOKENS-BEGIN/,/TOKENS-END/p' public/overlay.css) \
+          <(sed -n '/TOKENS-BEGIN/,/TOKENS-END/p' public/admin/admin.css)
+   ========================================================================== */
+:root {
+  /* ---- ink ramp: one cool near-black ramp, used by all three surfaces ---- */
+  --ink-1000: #05060A;   /* plate base — the deepest surface in the system */
+  --ink-950:  #0A0B0F;   /* admin page plane */
+  --ink-900:  #101218;   /* card fill base / recap chart surface / admin section */
+  --ink-800:  #171A22;   /* raised control */
+  --ink-700:  #232733;   /* pressed control, input well */
+  --ink-600:  #333947;
+  --ink-500:  #4B5364;   /* axis, baseline, outline-button border */
+  --ink-400:  #6E7889;   /* de-emphasis data mark */
+  --ink-300:  #9BA4B4;   /* muted ink — OPAQUE surfaces only, never over gameplay */
+  --ink-200:  #C6CCD8;   /* secondary ink */
+  --ink-100:  #E6E9EF;
+  --ink-000:  #FFFFFF;   /* primary ink and every hero numeral */
+
+  /* ---- accent: the ONE recolourable value. See §1.5. ---- */
+  --accent:     #FF5A1F;
+  --accent-rgb: 255, 90, 31;
+
+  /* ---- status: lifted verbatim from dataviz/references/palette.md, unchanged ---- */
+  --good:     #0CA30C;   /* LIVE, won            5.58:1 on --ink-900 */
+  --warning:  #FAB219;   /* armed "stop after"  10.20:1 */
+  --serious:  #EC835A;   /* skipped              7.10:1 */
+  --critical: #D03B3B;   /* stop now, 409        3.90:1 */
+
+  /* ---- data marks: fixed, validated, NEVER derived from --accent (§7.1) ---- */
+  --viz-win:  #3987E5;   /* 5.14:1 on --ink-900 */
+  --viz-loss: #E66767;   /* 5.80:1 */
+  --viz-mute: var(--ink-400);
+  --viz-grid: #3D4557;   /* 1.95:1 — recessive but survives H.264 at 2px */
+  --viz-axis: var(--ink-500);
+
+  /* ---- type scale: Inter, ratio ~1.28, every step a whole px ---- */
+  --t-xs:    13px;
+  --t-sm:    16px;
+  --t-md:    20px;
+  --t-lg:    26px;
+  --t-xl:    33px;
+  --t-2xl:   42px;
+  --t-3xl:   54px;
+  --t-4xl:   76px;
+  --t-hero:  92px;
+
+  /* ---- spacing: 4px base ---- */
+  --s-1: 4px;  --s-2: 8px;  --s-3: 12px; --s-4: 16px;
+  --s-5: 24px; --s-6: 32px; --s-7: 48px; --s-8: 64px;
+
+  /* ---- radii ---- */
+  --r-sm: 6px; --r-md: 12px; --r-lg: 16px; --r-xl: 22px; --r-pill: 999px;
+
+  /* ---- easing: five curves, no sixth ---- */
+  --e-out:  cubic-bezier(.16, 1, .3, 1);        /* entrances, wipes — exponential ease-out */
+  --e-in:   cubic-bezier(.55, 0, 1, .45);       /* exits — accelerate away and be gone */
+  --e-land: cubic-bezier(.18, 1.28, .3, 1);     /* the weighty landing: ~8% overshoot, then settle */
+  --e-drop: cubic-bezier(.62, .02, .88, .24);   /* the deflate: hangs, then falls */
+  --e-io:   cubic-bezier(.42, 0, .58, 1);       /* the flame's default */
+
+  /* ---- durations: the SAME numbers as overlay.js's DUR map (SPEC §7.4). See §4.1. ---- */
+  --d-undo:         250ms;
+  --d-intro-fade:   400ms;   /* cause session_start */
+  --d-win:          450ms;
+  --d-wipe:         500ms;   /* cause skip AND game_abandoned */
+  --d-loss:         600ms;
+  --d-streak-in:    700ms;
+  --d-end:          700ms;   /* cause session_end */
+  --d-streak-break: 800ms;
+  --d-intro:        900ms;   /* cause game_start */
+  --d-won:         1800ms;
+  --d-ui:           140ms;   /* admin only: press/hover feedback */
+}
+/* =============================== TOKENS-END =============================== */
+
+/* ---- admin-only tokens (DESIGN 1.3) ---- */
+:root {
+  --surface-0: var(--ink-950);   /* page */
+  --surface-1: var(--ink-900);   /* section card */
+  --surface-2: var(--ink-800);   /* raised control */
+  --surface-3: var(--ink-700);   /* pressed / input well */
+
+  /* Control geometry (DESIGN 6.2). Literal px: a pointer target is a literal size.
+     --tap-primary retired with the phone layout — WIN/LOSS are 72px, stated at the rule. */
+  --tap-min:      44px;   /* absolute floor, every interactive element */
+  --tap-second:   56px;   /* UNDO height */
+  --bar-pad:      12px;
+  --hold-ms:     350ms;   /* UNDO press-and-hold */
+}
+
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/inter-var-latin.woff2') format('woff2');
+  font-weight: 400 900;
+  font-style: normal;
+  font-display: block;
+  /* format('woff2') — NOT format('woff2-variations'). The latter is a dead early-draft keyword
+     that Chromium (and therefore OBS's CEF) does not recognise, and an unrecognised format()
+     makes the UA skip that src component entirely: Inter would never even be requested, and
+     font-display:block hides the swap, so the whole overlay renders in the CEF default font with
+     no 404 in the log to explain it. Plain woff2 loads variable fonts everywhere.
+     font-display:block, not swap: a FOUT on camera looks broken. */
+}
+
+/* ================================ base ================================ */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--surface-0);
+  color: var(--ink-000);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: var(--t-sm);
+  font-weight: 400;
+  line-height: 1.35;
+  padding-bottom: var(--s-5);
+  accent-color: var(--accent);
+}
+
+h3 { margin: var(--s-4) 0 var(--s-2); }
+p { margin: 0; }
+
+img { max-width: 100%; }
+
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+
+/* DESIGN 6.7: focus is never removed. One rule, and the panel stays keyboard-operable. */
+:focus-visible { outline: 3px solid var(--viz-win); outline-offset: 2px; }
+
+/* Numbers that sit in a column must not shift as they tick (DESIGN 8.2). */
+#live-readout .counters,
+.viz-axis { font-variant-numeric: tabular-nums; }
+
+
+/* ================================ 8.1 the readout ================================ */
+
+/* ONE layout. The build carried a second, phone-specific one — controls pinned to the bottom
+   edge under the thumb, with a matching padding reservation on <body> — but the panel is
+   operated on a desktop, so it is deleted rather than left here unused and untested. */
+#topbar {
+  position: sticky; top: 0; z-index: 30;
+  display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--s-4);
+  padding-top: 6px;
+  background: var(--surface-1);
+  box-shadow: 0 1px 0 var(--ink-700);
+}
+
+#live-readout {
+  flex: 1 1 auto; min-width: 0;
+  padding: var(--s-3);
+}
+
+/* Row 0: the 6px status rule. Four non-colour signals back it up (DESIGN 6.5). Absolute against
+   the sticky #topbar so it stays full-bleed across the whole row. */
+#status-rule {
+  position: absolute; top: 0; left: 0; right: 0;
+  height: 6px;
+  background: var(--ink-700);
+}
+body[data-phase="live"] #status-rule { background: var(--good); }
+body[data-conn="down"] #status-rule { background: var(--warning); }
+
+.rd-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); min-height: 24px; }
+
+.pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 10px;
+  border: 1.5px solid var(--ink-500);
+  border-radius: var(--r-pill);
+  color: var(--ink-300);
+  font-size: var(--t-xs); font-weight: 700; letter-spacing: .10em; text-transform: uppercase;
+  white-space: nowrap;
+}
+.pill .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+body[data-phase="live"] .pill { background: var(--good); border-color: var(--good); color: var(--ink-000); }
+body[data-conn="down"] .pill { background: none; border-color: var(--warning); color: var(--warning); }
+
+.rd-cover { width: 36px; height: 48px; object-fit: cover; border-radius: var(--r-sm); background: var(--ink-700); }
+
+.rd-meta { font-size: var(--t-xs); font-weight: 500; color: var(--ink-300); }
+
+.rd-title {
+  margin-top: var(--s-1);
+  font-size: var(--t-md); font-weight: 600; color: var(--ink-000);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.rd-title:empty { display: none; }
+
+.counters { display: flex; gap: var(--s-5); margin-top: var(--s-2); }
+.ctr { display: flex; align-items: baseline; gap: var(--s-2); }
+.ctr-v { font-size: var(--t-xl); font-weight: 800; letter-spacing: -.02em; color: var(--ink-000); }
+.ctr-l { font-size: var(--t-xs); font-weight: 500; color: var(--ink-300); }
+/* Not live: the counters are an em dash in --ink-500, not a stale number (DESIGN 6.5). */
+body:not([data-phase="live"]) .ctr-v { color: var(--ink-500); }
+
+/* The 409 / failure reason takes the counters' slot for 2.5s. No modal, no toast stack. */
+.rd-msg { margin-top: var(--s-2); font-size: var(--t-sm); font-weight: 600; color: var(--warning); }
+.rd-msg:empty { display: none; }
+#live-readout[data-msg] .counters { display: none; }
+
+/* ================================ 8.1 the action bar ================================ */
+
+#live-actions {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: var(--bar-pad);
+  padding-top: 0;
+  /* #btn-undo's fill is a z-index:-1 pseudo-element; without a stacking context here it would
+     paint behind the bar's own background and never be seen. */
+  isolation: isolate;
+}
+
+.act-row { display: flex; gap: 10px; }
+
+.act {
+  border: 0;
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  color: var(--ink-000);
+  font-size: var(--t-md); font-weight: 800; letter-spacing: .02em; text-transform: uppercase;
+  transition: transform var(--d-ui) var(--e-out);
+}
+.act:active { transform: scale(.97); }
+
+/* Secondary row reversed so SKIP sits inboard and UNDO ends up furthest from the pointer. */
+.act-row:last-of-type { flex-direction: row-reverse; justify-content: flex-end; }
+.act-win  { flex: 0 0 168px; height: 72px; background: var(--good); }
+.act-loss { flex: 0 0 220px; height: 72px; background: var(--critical); }
+.act-skip { flex: 0 0 148px; height: 72px; background: var(--surface-3);
+            border: 1px solid var(--ink-600); border-radius: var(--r-md); }
+.deadzone { flex: 0 0 48px; border-right: 1px solid var(--ink-700); }  /* UNDO/SKIP share no edge */
+
+/* DESIGN 6.3, literal: the only outline control on the page, and it is press-and-hold. */
+#btn-undo { position: relative; overflow: hidden; background: none;
+            border: 1.5px solid var(--ink-500); border-radius: var(--r-pill);
+            flex: 0 0 128px; height: var(--tap-second); color: var(--ink-200); }
+#btn-undo::before { content: ''; position: absolute; inset: 0;
+            background: var(--ink-600); transform: scaleX(0); transform-origin: 0 50%;
+            transition: transform 120ms var(--e-in); z-index: -1; }
+#btn-undo[data-holding]::before { transform: scaleX(1);
+            transition: transform var(--hold-ms) linear; }
+#btn-undo[data-holding] { border-color: var(--ink-300); }
+#btn-undo[data-fired] { background: var(--ink-600); color: var(--ink-000); }
+#btn-undo { text-transform: none; font-weight: 700; }
+
+.act-session { width: min(366px, 100%); height: 72px; background: var(--good); }
+
+/* The controls you use while live do not exist while not live (DESIGN 6.5) — there is no
+   disabled grey WIN to press hopefully at. UNDO is the one exception and it outlives the
+   session: one UNDO takes back an accidental "Jetzt stoppen", or the session_end a completing
+   win appended on the last game (SPEC 2.5j). Without it that undo is Stream-Deck-only. */
+body[data-phase="live"] .act-session { display: none; }
+body:not([data-phase="live"]) .act-row:first-of-type { display: none; }
+body:not([data-phase="live"]) .act-skip,
+body:not([data-phase="live"]) .deadzone { display: none; }
+body[data-phase="idle"] .act-row { display: none; }
+
+/* In-flight: dim, never move. A layout that jumps for 200ms is worse than one that dims. */
+body[data-busy] .act { opacity: .55; pointer-events: none; }
+
+/* A 409 flashes the button's fill for 400ms (DESIGN 6.5). Instant swap, never a transition. */
+.act[data-flash] { background: var(--critical); box-shadow: inset 0 0 0 3px var(--ink-000); }
+
+/* ================================ sections ================================ */
+
+/* Two INDEPENDENT columns, not a grid: grid rows are shared across columns, so a collapsed
+   section sat in a row stretched by the open section beside it — a screenful of dead space
+   for every fold. Flex columns size themselves; folding one section never moves the other
+   column. Under ~920px the columns stack into one. */
+#page { padding: var(--s-3); max-width: 1180px; margin: 0 auto;
+        display: flex; flex-wrap: wrap; gap: var(--s-4); align-items: flex-start; }
+#resume { flex: 1 1 100%; }
+.col { flex: 1 1 420px; min-width: 0; display: flex; flex-direction: column; gap: var(--s-4); }
+
+.sec {
+  background: var(--surface-1);
+  border-radius: var(--r-lg);
+}
+.sec-head {
+  display: flex; align-items: center; gap: var(--s-3);
+  min-height: 56px; padding: 0 var(--s-4);
+  list-style: none; cursor: pointer;
+}
+.sec-head::-webkit-details-marker { display: none; }
+.sec-title { flex: 1 1 auto; font-size: var(--t-md); font-weight: 700; }
+.chev { width: 24px; height: 24px; flex: 0 0 24px; fill: none; stroke: var(--ink-300); stroke-width: 2.5;
+        stroke-linecap: round; stroke-linejoin: round; }
+/* DESIGN 6.7: accordions animate nothing. The chevron flips, it does not tween. */
+.sec[open] > .sec-head .chev { transform: rotate(180deg); }
+.sec-body { padding: 0 var(--s-4) var(--s-4); }
+.sec-sub { font-size: var(--t-xs); font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+           color: var(--ink-200); }
+
+.chip {
+  padding: 3px 8px; border-radius: var(--r-sm); background: var(--surface-3);
+  font-size: var(--t-xs); font-weight: 700; letter-spacing: .10em; text-transform: uppercase;
+  color: var(--ink-200); white-space: nowrap;
+}
+.chip:empty { display: none; }
+.chip-live { background: var(--good); color: var(--ink-000); }
+.chip-warn { background: var(--warning); color: var(--ink-1000); }
+/* Armed "stop after current": the section itself carries the signal, not just the switch. */
+.sec[data-armed] { border-left: 3px solid var(--warning); }
+
+/* ---- generic controls ---- */
+
+.btn {
+  min-height: var(--tap-min); min-width: var(--tap-min);
+  padding: 0 var(--s-4);
+  border: 1px solid var(--ink-600); border-radius: var(--r-md);
+  background: var(--surface-2); color: var(--ink-000);
+  font-size: var(--t-sm); font-weight: 600;
+  transition: transform var(--d-ui) var(--e-out);
+}
+.btn:active { transform: scale(.97); }
+.btn[disabled] { opacity: .4; pointer-events: none; }
+.btn-good { background: var(--good); border-color: var(--good); }
+.btn-danger-out { background: none; border: 1.5px solid var(--critical); color: var(--ink-000); }
+/* Two taps, one target, no dialog (DESIGN 6.6 / 8.4). */
+.btn[data-armed] { background: var(--critical); border-color: var(--critical); font-weight: 700; }
+#btn-stop-now { width: 100%; min-height: var(--tap-second); margin-top: var(--s-4); }
+
+.fld-row { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: flex-end; margin-top: var(--s-3); }
+/* The one primary action in a button row takes the leftover width; the destructive ones stay
+   content-sized beside it. */
+.btn-lead { flex: 1 1 auto; }
+.fld { display: flex; flex-direction: column; gap: var(--s-1); flex: 1 1 180px; min-width: 0; }
+.fld-lab { font-size: var(--t-xs); font-weight: 500; color: var(--ink-300); }
+.out { font-weight: 700; color: var(--ink-100); }
+
+input[type="text"], input[type="search"], select {
+  width: 100%; min-height: var(--tap-second);
+  padding: 0 var(--s-3);
+  background: var(--surface-3); color: var(--ink-000);
+  border: 1px solid var(--ink-600); border-radius: var(--r-md);
+}
+input[type="file"] { min-height: var(--tap-min); }
+input[type="range"] { width: 100%; min-height: var(--tap-min); }
+input[type="color"] { width: 64px; height: var(--tap-min); padding: 2px; background: var(--surface-3);
+                      border: 1px solid var(--ink-600); border-radius: var(--r-md); }
+
+.msg { margin-top: var(--s-2); font-size: var(--t-xs); font-weight: 500; color: var(--ink-300); }
+.msg:empty { display: none; }
+.msg[data-kind="err"] { color: var(--critical); font-weight: 600; }
+.msg[data-kind="ok"] { color: var(--good); font-weight: 600; }
+
+.note { margin-top: var(--s-3); font-size: var(--t-xs); font-weight: 500; color: var(--ink-300); }
+.note-warn { color: var(--warning); font-weight: 600; }
+
+/* ---- the switch: 52x32, inside a 56px row so the whole row is the hit target ---- */
+.latch {
+  display: flex; align-items: center; gap: var(--s-3);
+  min-height: var(--tap-second); margin-top: var(--s-3);
+  padding: 0 var(--s-3);
+  background: var(--surface-2); border-radius: var(--r-md);
+  cursor: pointer;
+}
+.latch-inline { flex: 0 0 auto; margin-top: 0; }
+.latch-txt { flex: 1 1 auto; display: flex; flex-direction: column; }
+.latch-lab { flex: 1 1 auto; font-size: var(--t-sm); font-weight: 600; }
+.latch-sub { font-size: var(--t-xs); font-weight: 500; color: var(--ink-300); }
+.latch-arm { border-left: 3px solid transparent; }
+.latch-arm[data-armed] { border-left-color: var(--warning); }
+
+.sw {
+  appearance: none; -webkit-appearance: none;
+  flex: 0 0 52px; width: 52px; height: 32px; margin: 0;
+  border: 0; border-radius: var(--r-pill);
+  background: var(--ink-700);
+  position: relative;
+}
+.sw::after {
+  content: ''; position: absolute; top: 3px; left: 3px;
+  width: 26px; height: 26px; border-radius: 50%;
+  background: var(--ink-200);
+  transition: transform var(--d-ui) var(--e-out);
+}
+.sw:checked { background: var(--good); }
+.sw:checked::after { transform: translateX(20px); background: var(--ink-000); }
+#sw-stop-after:checked { background: var(--warning); }
+
+/* ================================ 8.7 resume banner ================================ */
+
+/* `hidden` loses to `display: flex` — an attribute selector and a class selector have the same
+   specificity, and the UA sheet's [hidden] rule is weaker than both. Without this, hiding a
+   banner by setting .hidden leaves an empty outlined box on screen. */
+.banner[hidden] { display: none; }
+
+.banner {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3);
+  padding: var(--s-4);
+  margin-bottom: var(--s-3);
+  background: var(--surface-1);
+  border: 2px solid var(--good); border-radius: var(--r-lg);
+}
+.banner-text { flex: 1 1 200px; font-size: var(--t-sm); font-weight: 600; }
+.banner .btn { min-height: var(--tap-second); }
+
+/* ================================ 8.2 game library ================================ */
+
+.tiles {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: var(--s-3); margin-top: var(--s-3);
+}
+/* The first-run note rides inside the tile grid next to the lone "+" tile. */
+.tiles .lib-note { grid-column: 2 / -1; align-self: center; margin: 0; }
+.tile {
+  position: relative; display: block; padding: 0; overflow: hidden;
+  background: var(--surface-2); border: 1px solid var(--ink-700); border-radius: var(--r-md);
+  text-align: left; color: var(--ink-000);
+  transition: transform var(--d-ui) var(--e-out);
+}
+.tile:active { transform: scale(.97); }
+.tile-img { display: block; width: 100%; aspect-ratio: 3 / 4; object-fit: cover; background: var(--ink-700); }
+.tile-name {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  padding: var(--s-1) var(--s-2) var(--s-2);
+  font-size: var(--t-xs); font-weight: 600; line-height: 1.2;
+}
+.tile-sub { padding: 0 var(--s-2) var(--s-2); font-size: var(--t-xs); font-weight: 500; color: var(--ink-300); }
+.tile-chip {
+  position: absolute; right: 0; bottom: 34px;
+  min-width: 44px; min-height: 28px; padding: 0 var(--s-2);
+  border: 0; border-top-left-radius: var(--r-sm);
+  background: rgba(5, 6, 10, .86); color: var(--ink-000);
+  font-size: var(--t-xs); font-weight: 700;
+}
+.tile-del {
+  position: absolute; right: 0; top: 0;
+  width: var(--tap-min); height: var(--tap-min);
+  border: 0; background: rgba(5, 6, 10, .74); color: var(--ink-200);
+  font-size: var(--t-md); font-weight: 700; line-height: 1;
+  border-bottom-left-radius: var(--r-md);
+}
+.tile-del[data-armed] { background: var(--critical); color: var(--ink-000); }
+.tile-add {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 139px;
+  background: none; border: 2px dashed var(--ink-500); border-radius: var(--r-md);
+  color: var(--ink-200); font-size: var(--t-xl); font-weight: 700;
+}
+.tile-add[aria-expanded="true"] { border-style: solid; border-color: var(--accent); }
+.manual { margin-top: var(--s-5); padding-top: var(--s-3); border-top: 2px solid var(--ink-800); }
+
+/* ================================ 8.3 session builder ================================ */
+
+.sg-list { list-style: none; margin: var(--s-4) 0 0; padding: 0; }
+.sg-row {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2);
+  min-height: 64px; padding: var(--s-2) var(--s-2) var(--s-2) 0;
+  border-top: 2px solid var(--ink-800);
+  border-left: 3px solid transparent;
+}
+.sg-row[data-current] { border-left-color: var(--good); }
+.sg-row[data-drop] { background: var(--surface-2); }
+.grip {
+  flex: 0 0 44px; width: 44px; height: 64px;
+  display: flex; align-items: center; justify-content: center;
+  background: none; border: 0; color: var(--ink-400);
+  touch-action: none; cursor: grab;
+}
+.sg-row[data-current] .grip { opacity: .3; pointer-events: none; cursor: default; }
+.sg-cover { flex: 0 0 36px; width: 36px; height: 48px; object-fit: cover; border-radius: var(--r-sm);
+            background: var(--ink-700); }
+.sg-title { flex: 1 1 120px; min-width: 0; font-size: var(--t-sm); font-weight: 600;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sg-flag { font-size: var(--t-xs); font-weight: 700; letter-spacing: .10em; color: var(--good); }
+.sg-actions { display: flex; gap: var(--s-1); margin-left: auto; }
+.icon-btn {
+  width: var(--tap-min); height: var(--tap-min);
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--surface-2); border: 1px solid var(--ink-600); border-radius: var(--r-sm);
+  color: var(--ink-100); font-size: var(--t-sm); font-weight: 700;
+  transition: transform var(--d-ui) var(--e-out);
+}
+.icon-btn:active { transform: scale(.97); }
+.icon-btn[disabled] { opacity: .3; pointer-events: none; }
+.icon-btn[data-armed] { background: var(--critical); border-color: var(--critical); color: var(--ink-000); }
+.sg-msg { flex: 1 1 100%; font-size: var(--t-xs); font-weight: 600; color: var(--critical); }
+.sg-msg:empty { display: none; }
+.mode-chip {
+  min-width: 44px; min-height: 28px; padding: 0 var(--s-2);
+  background: var(--surface-3); border: 1px solid var(--ink-600); border-radius: var(--r-sm);
+  color: var(--ink-100); font-size: var(--t-xs); font-weight: 700;
+}
+.icons { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2.5;
+         stroke-linecap: round; stroke-linejoin: round; }
+.icons-dot { fill: currentColor; stroke: none; }
+
+/* ================================ 8.5 URLs + preview ================================ */
+
+.copy-rows { margin-top: var(--s-3); }
+.copy-row {
+  display: flex; align-items: center; gap: var(--s-2);
+  min-height: var(--tap-second);
+  border-top: 2px solid var(--ink-800);
+}
+.copy-lab { flex: 0 0 88px; font-size: var(--t-xs); font-weight: 600; color: var(--ink-300); }
+.copy-val {
+  flex: 1 1 auto; min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: var(--t-xs);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.copy-btn { flex: 0 0 88px; height: var(--tap-min); display: inline-flex; align-items: center;
+            justify-content: center; gap: 6px; }
+
+.prev-ctl { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--s-3);
+            margin-top: var(--s-3); }
+.checker {
+  width: 560px; height: 200px; max-width: 100%; overflow: hidden;
+  margin-top: var(--s-3); border-radius: var(--r-md);
+  background: repeating-conic-gradient(var(--ink-800) 0% 25%, var(--ink-700) 0% 50%) 0 0 / 32px 32px;
+}
+#preview { display: block; width: 560px; max-width: 100%; height: 200px; border: 0; }
+
+
+/* ================================ 8.6 history + the recap components ================================ */
+
+.hist { margin-top: var(--s-3); }
+.hist-row { border-top: 2px solid var(--ink-800); }
+.hist-head {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2);
+  min-height: 56px; padding: var(--s-2) 0;
+  list-style: none; cursor: pointer;
+}
+.hist-head::-webkit-details-marker { display: none; }
+.hist-title { flex: 1 1 140px; min-width: 0; font-size: var(--t-sm); font-weight: 600;
+              overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hist-date { font-size: var(--t-xs); font-weight: 500; color: var(--ink-300); }
+.hist-nums { margin-left: auto; font-variant-numeric: tabular-nums; font-size: var(--t-sm);
+             font-weight: 600; color: var(--ink-100); text-align: right; }
+.hist-body { padding-bottom: var(--s-4); }
+.hist-dl { display: flex; gap: var(--s-2); margin-top: var(--s-3); }
+.hist-dl .btn { text-decoration: none; display: inline-flex; align-items: center; }
+
+/* The KPI row and the per-game table come from recap.js (DESIGN 8.6: no second implementation);
+   its injected stylesheet reads this page's --ink/--viz/--t tokens, so no styles live here.
+   Only the hero figure is resized down to fit inside an accordion row. */
+.hist-body .r-hero { font-size: var(--t-2xl); }
+
+
+/* DESIGN 6.7, literal. Not in overlay.css: the overlay is a broadcast graphic, and the OBS
+   machine has no reduced-motion preference to express. */
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important; }
+}
+
+/* ================================ tool switcher ================================ */
+/* Two tools, two pages (feature prompt G.7). Without this there is literally no way to reach
+   the clock from the win-challenge panel. */
+#nav { display: flex; gap: var(--s-2); margin-left: auto; }
+#nav a {
+  display: inline-flex; align-items: center; min-height: 34px; padding: 0 var(--s-3);
+  border-radius: var(--r-pill); text-decoration: none;
+  font-size: var(--t-xs); font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--ink-300); background: var(--surface-2);
+}
+#nav a[aria-current="page"] { background: var(--ink-000); color: var(--ink-1000); }
+#nav a:hover { color: var(--ink-000); }
+#nav a[aria-current="page"]:hover { color: var(--ink-1000); }
+
+/* The language toggle rides in the nav and dresses like its links (a button, for semantics). */
+#nav .lang {
+  display: inline-flex; align-items: center; min-height: 34px; padding: 0 var(--s-3);
+  border: 0; border-radius: var(--r-pill); cursor: pointer;
+  font: inherit; font-size: var(--t-xs); font-weight: 700; letter-spacing: .06em;
+  color: var(--ink-300); background: var(--surface-2);
+}
+#nav .lang:hover { color: var(--ink-000); }
