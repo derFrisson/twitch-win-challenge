@@ -909,6 +909,15 @@ function wireUrls() {
       }),
     );
   }
+
+  // The rehearsal buttons: one broadcast to every connected overlay (OBS and the preview above),
+  // which plays the beat locally and snaps back by itself. No state, no undo, nothing to guard.
+  for (const btn of document.querySelectorAll('[data-sim]')) {
+    btn.addEventListener('click', async () => {
+      const r = await send('POST', '/api/admin/simulate', { kind: btn.dataset.sim });
+      msg($('sim-msg'), r.ok ? t('simSent') : errText(r), r.ok ? 'ok' : 'err');
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -336,6 +336,54 @@ function paint(step, beat) {
   card.dataset.mode = mode;
 }
 
+// ======================== simulation (rehearsal, never state) ========================
+// The admin's "Simulieren" buttons. A sim rides the normal animation queue as a locally
+// synthesised step built from the state on screen, holds a moment, then a second, instant step
+// restores the truth. lastSeq is reused, not advanced, so the real stream is untouched — and if
+// a REAL step lands during the hold, `rendered` moves past our fake state and the restore is
+// skipped, because the real step already painted newer truth.
+
+const SIM_HOLD_MS = 3000;
+
+function simulate(kind) {
+  if (rendered === null || rendered.phase !== 'live') return;   // nothing on camera to rehearse on
+  const real = rendered;
+  const st = JSON.parse(JSON.stringify(real));   // plain JSON by construction (it crossed the wire)
+  const g = (st.playlist ?? []).find((r) => r.status === 'active');
+  if (!g) return;
+
+  let cause;
+  if (kind === 'win') {
+    cause = 'win';
+    g.streak = Math.min(g.streak + 1, g.required);
+    st.displayMode = g.streak < g.required ? 'STREAK_MODE' : 'LOSS_MODE';
+    if (st.current !== null) st.current.streak = g.streak;
+  } else if (kind === 'won') {
+    cause = 'game_won';
+    g.streak = g.required;
+    g.status = 'done';
+    if (st.current !== null) { st.current.streak = g.required; } else { st.current = g; }
+    st.totals.gamesWon += 1;
+  } else if (kind === 'loss') {
+    cause = 'loss';
+    g.streak = 0;
+    g.losses += 1;
+    st.displayMode = 'LOSS_MODE';
+    st.totals.losses += 1;
+    if (st.current !== null) st.current.streak = 0;
+  } else {
+    return;   // a kind this build has never heard of: ignore, exactly like an unknown cause
+  }
+
+  queue.push({ seq: lastSeq, cause, at: Date.now(), state: st });
+  if (!playing) drain();
+  setTimeout(() => {
+    if (rendered !== st) return;                 // real state moved on; it is the newer truth
+    queue.push({ seq: lastSeq, cause: 'config', at: Date.now(), state: real });
+    if (!playing) drain();
+  }, SIM_HOLD_MS);
+}
+
 // ======================== the WS client (SPEC §4.4–§4.6) ========================
 
 // BYTE-EXACT. The DO registers setWebSocketAutoResponse(new WebSocketRequestResponsePair(
@@ -404,6 +452,7 @@ function connect() {
     try { msg = JSON.parse(ev.data); } catch { return; }
     if (msg === null || typeof msg !== 'object') return;
     if (msg.t === 'error') { console.error('overlay: server refused the socket', msg.code); return; }
+    if (msg.t === 'sim' && typeof msg.kind === 'string') { simulate(msg.kind); return; }
     if (msg.t !== 'state' || !Array.isArray(msg.steps)) return;   // 'pong' lands here and is a no-op
     for (const step of msg.steps) onStep(step);
   };

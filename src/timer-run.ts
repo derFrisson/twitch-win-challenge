@@ -52,7 +52,10 @@ export type TimerStep = {
 export type TimerMsg =
   | { t: 'timer'; steps: TimerStep[] }
   | { t: 'pong' }
-  | { t: 'error'; code: 'read_only' | 'bad_message' };
+  | { t: 'error'; code: 'read_only' | 'bad_message' }
+  // A rehearsal, never state: the overlay plays the toast/sound/jump and then falls back to the
+  // last real step. Nothing is written, no seq is consumed, old clients ignore the unknown `t`.
+  | { t: 'sim'; kind: 'donation'; alert: DonationAlert };
 
 // ---------- SQL ----------
 
@@ -250,6 +253,20 @@ export class TimerRun extends DurableObject<Env> {
       this.broadcast([this.step('snapshot', [])]);
       return out;
     });
+  }
+
+  /** Broadcast a fake €5 donation to every connected overlay. Reads config only to price the
+   *  toast with the run's real rate; writes nothing and consumes no seq. */
+  async simulateDonation(): Promise<{ ok: true }> {
+    const cfg = await this.loadCfg();
+    const rate = cfg.run !== null && cfg.run.cents_per_hour > 0 ? cfg.run.cents_per_hour : 1000;
+    const amountCents = 500;
+    const alert: DonationAlert = {
+      id: `sim-${Date.now()}`, name: null, amountCents,
+      addedMs: Math.floor((amountCents * 3_600_000) / rate),
+    };
+    this.sendAll(JSON.stringify({ t: 'sim', kind: 'donation', alert } satisfies TimerMsg));
+    return { ok: true };
   }
 
   /**
@@ -570,7 +587,9 @@ export class TimerRun extends DurableObject<Env> {
   }
 
   private broadcast(steps: TimerStep[]): void {
-    const body = JSON.stringify({ t: 'timer', steps } satisfies TimerMsg);
+    this.sendAll(JSON.stringify({ t: 'timer', steps } satisfies TimerMsg));
+  }
+  private sendAll(body: string): void {
     for (const ws of this.ctx.getWebSockets()) {
       try { if (ws.readyState === WebSocket.OPEN) ws.send(body); } catch (e) { console.error('ws send failed', e); }
     }

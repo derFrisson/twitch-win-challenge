@@ -74,6 +74,26 @@
       <div class="sec-body" id="ledger-body"></div>
     </details>
 
+    <!-- Static, never innerHTML-rewritten: a chosen file must survive the WS-push repaints. -->
+    <details id="sec-sound" class="sec">
+      <summary class="sec-head"><span class="sec-title" data-s="secSound"></span>
+        <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5" /></svg></summary>
+      <div class="sec-body">
+        <p class="note" data-s="soundNote"></p>
+        <div class="row">
+          <label class="fld"><span class="fld-lab" data-s="soundFile"></span>
+            <input id="snd-file" type="file" accept="audio/*" /></label>
+          <button id="snd-upload" class="btn btn-good" type="button" data-s="soundUpload"></button>
+        </div>
+        <div class="row">
+          <button id="snd-test" class="btn" type="button" data-s="soundTest" data-st="tipSoundTest"></button>
+          <button id="snd-sim" class="btn" type="button" data-s="soundSim" data-st="tipSoundSim"></button>
+          <button id="snd-del" class="btn btn-danger-out" type="button" data-s="soundDelete"></button>
+        </div>
+        <p id="snd-msg" class="msg"></p>
+      </div>
+    </details>
+
     </div><!-- /.col -->
   </main>
 

@@ -316,6 +316,8 @@ async function load() {
   render('camp-body', renderCampaigns);
   render('don-body', renderDonations);
   render('ledger-body', renderLedger);
+  // The sound section is static HTML; only the two buttons that need an uploaded file follow it.
+  $('snd-test').disabled = $('snd-del').disabled = !state.sound;
 }
 
 function applyStrings() {
@@ -344,6 +346,32 @@ $('btn-pause').addEventListener('click', async () => {
 $('btn-plus').addEventListener('click', async () => {
   await api('/adjustments', { method: 'POST', body: JSON.stringify({ ms: H, note: t('plusHour') }) });
   await load();
+});
+
+// ---- the donation sound + its rehearsal ----
+$('snd-upload').addEventListener('click', async () => {
+  const f = $('snd-file').files[0];
+  if (!f) { $('snd-msg').textContent = t('soundPick'); return; }
+  // The api() helper would label the body application/json; the file's own type must win.
+  const res = await api('/sound', { method: 'PUT', body: f, headers: { 'content-type': f.type || 'audio/mpeg' } });
+  $('snd-msg').textContent = res.ok ? t('soundSaved') : (res.data?.error === 'too_large' ? t('soundTooBig') : t('failed'));
+  if (res.ok) await load();
+});
+$('snd-test').addEventListener('click', () => {
+  // Heard HERE, in the admin tab — the OBS check is the simulate button beside it.
+  new Audio('/api/admin/timer/sound').play().catch(() => { $('snd-msg').textContent = t('failed'); });
+});
+$('snd-sim').addEventListener('click', async () => {
+  const res = await fetch('/api/admin/simulate', {
+    method: 'POST', cache: 'no-store', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ kind: 'donation' }), signal: AbortSignal.timeout(10_000),
+  }).catch(() => null);
+  $('snd-msg').textContent = res?.ok ? t('simSent') : t('failed');
+});
+$('snd-del').addEventListener('click', async () => {
+  const res = await api('/sound', { method: 'DELETE' });
+  $('snd-msg').textContent = res.ok ? t('soundDeleted') : t('failed');
+  if (res.ok) await load();
 });
 
 // ---- push channel: the DO broadcasts on every poll / control / config change. The WS payload

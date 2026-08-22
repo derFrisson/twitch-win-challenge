@@ -136,6 +136,10 @@ const TQ_ADJUSTMENTS = `SELECT id, cents, ms, note, author, created_at, undone_a
 const TIMER_INT_FIELDS = ['base_ms', 'cents_per_hour', 'cap_ms', 'manual_exclusion_cents',
   'poll_interval_ms', 'auto_pause', 'auto_pause_after'] as const;
 
+// The uploaded donation sound. One fixed key: uploading replaces, deleting silences.
+const DONATION_SOUND_KEY = 'sfx/donation';
+const MAX_SOUND_BYTES = 4 * 1024 * 1024;   // 4 MB is a generous ceiling for a one-shot alert
+
 // SPEC 5.3's body shape. Kept local: auth.ts's export surface is fixed at four things (SPEC 6.1).
 function err(status: number, error: string, detail?: string): Response {
   return json(detail === undefined ? { error } : { error, detail }, status);
@@ -404,6 +408,19 @@ async function adminApi(request: Request, env: Env, url: URL, seg: string[]): Pr
   const a = seg[2];
   // The clock's whole admin surface lives under one prefix and one handler.
   if (a === 'timer') return timerApi(request, env, seg);
+
+  // POST /api/admin/simulate {kind} — rehearse one overlay beat in OBS. Pure broadcast: nothing
+  // is written, no seq moves, the overlays snap back to the real state by themselves.
+  if (a === 'simulate' && seg.length === 3) {
+    if (m !== 'POST') return methodNotAllowed('POST');
+    const body = await readJson(request);
+    const kind = typeof body?.kind === 'string' ? body.kind : '';
+    if (kind === 'donation') { await timerStub(env).simulateDonation(); return json({ ok: true }); }
+    if (kind !== 'win' && kind !== 'won' && kind !== 'loss') return err(400, 'bad_kind');
+    await stub(env).simulate(kind);
+    return json({ ok: true });
+  }
+
   const b = seg[3];
   const c = seg[4];
 
@@ -1072,6 +1089,18 @@ async function overlay(request: Request, env: Env, url: URL, seg: string[]): Pro
       if (role !== 'overlay') return notFound();
       return timerStub(env).fetch(new Request(url, request));
     }
+    // The donation sound. Uncharged like the shell: it loads exactly when the shell does, and an
+    // OBS restart must not spend the rate bucket on an <audio> preload.
+    if (seg.length === 4 && seg[3] === 'sound') {
+      const role = await authTokenRole(env, token, false);
+      if (role !== 'overlay') return notFound();
+      const obj = await env.COVERS.get(DONATION_SOUND_KEY);
+      if (obj === null) return notFound();
+      const headers = new Headers();
+      obj.writeHttpMetadata(headers);
+      headers.set('Cache-Control', 'no-store');
+      return new Response(obj.body, { headers });
+    }
     return notFound();
   }
 
@@ -1292,17 +1321,48 @@ async function timerApi(request: Request, env: Env, seg: string[]): Promise<Resp
       ?? runs.results.find((r) => r.status === 'draft')
       ?? runs.results[0] ?? null;
     const id = typeof live?.id === 'number' ? live.id : null;
-    const [campaigns, donations, adjustments, snap] = await Promise.all([
+    const [campaigns, donations, adjustments, snap, soundHead] = await Promise.all([
       id === null ? Promise.resolve({ results: [] }) : env.DB.prepare(TQ_CAMPAIGNS).bind(id).all<Record<string, unknown>>(),
       id === null ? Promise.resolve({ results: [] }) : env.DB.prepare(TQ_DONATIONS).bind(id).all<Record<string, unknown>>(),
       id === null ? Promise.resolve({ results: [] }) : env.DB.prepare(TQ_ADJUSTMENTS).bind(id).all<Record<string, unknown>>(),
       timerStub(env).snapshot(),
+      env.COVERS.head(DONATION_SOUND_KEY),
     ]);
     return json({
       runs: runs.results, run: live,
       campaigns: campaigns.results, donations: donations.results, adjustments: adjustments.results,
-      timer: snap.timer, pool: snap.pool,
+      timer: snap.timer, pool: snap.pool, sound: soundHead !== null,
     });
+  }
+
+  // ---- the donation sound: one R2 object, uploaded here, played by the timer overlay ----
+  // The key contains a '/' on purpose: route 43 rejects keys with a separator, so this object
+  // is unreachable through /covers/* and cannot collide with any cover.
+  if (a === 'sound' && seg.length === 4) {
+    if (m === 'GET') {
+      const obj = await env.COVERS.get(DONATION_SOUND_KEY);
+      if (obj === null) return notFound();
+      const headers = new Headers();
+      obj.writeHttpMetadata(headers);
+      headers.set('Cache-Control', 'no-store');   // replaceable, unlike the immutable covers
+      return new Response(obj.body, { headers });
+    }
+    if (m === 'PUT') {
+      const ct = (request.headers.get('Content-Type') ?? '').split(';')[0]?.trim() ?? '';
+      if (!ct.startsWith('audio/')) return err(400, 'bad_content_type');
+      const declared = Number(request.headers.get('Content-Length'));
+      if (Number.isFinite(declared) && declared > MAX_SOUND_BYTES) return err(413, 'too_large');
+      const bytes = await request.arrayBuffer();
+      if (bytes.byteLength === 0) return err(400, 'empty_body');
+      if (bytes.byteLength > MAX_SOUND_BYTES) return err(413, 'too_large');
+      await env.COVERS.put(DONATION_SOUND_KEY, bytes, { httpMetadata: { contentType: ct } });
+      return json({ ok: true });
+    }
+    if (m === 'DELETE') {
+      await env.COVERS.delete(DONATION_SOUND_KEY);
+      return json({ ok: true });
+    }
+    return methodNotAllowed('GET, PUT, DELETE');
   }
 
   // ---- GET /api/admin/timer/ws : the admin page's push channel. Same DO socket the overlay

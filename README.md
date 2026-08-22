@@ -217,8 +217,9 @@ these for you.
 | `mono` | `0` | `0 1` | White accent, the escape hatch when the accent fights the game |
 
 The recap page accepts `?session=<id>` (default: the live session, else the newest ended
-one). The clock widget accepts `scale`, `opacity`, `accent`, `pos`, `lang`, and `goal=1` for
-a goal bar.
+one). The clock widget accepts `scale`, `opacity`, `accent`, `pos`, `lang`, `goal=1` for
+a goal bar, and `vol` (`0.0-0.8`, default `0.5`) for the donation sound — a custom sound
+uploaded in its admin page and played whenever a poll detects a new donation (`vol=0` mutes).
 
 **About `?sfx=1`:** the three files in `public/sfx/` are valid but silent placeholders.
 Replace them with your own sounds before turning sound on; see
@@ -244,6 +245,12 @@ The clock is **derived, never stored**: earned time is computed from base + dona
 reloads, redeploys and reboots by construction. Everything about the money model (rate, base
 hours, cap, per-donation "counts for time" toggles, manual corrections) is a live-editable
 field in its admin page.
+
+Both admin pages carry **simulation buttons** (win-challenge admin: under the preview;
+clock admin: in the donation-sound section) that rehearse an event on every connected
+overlay — a win, the game-won takeover, a loss, or a donation with toast, sound and time
+jump. The overlay plays the beat for a few seconds and snaps back to the real state on its
+own; nothing is stored and no counter moves.
 
 **Read [the operations guide](docs/OPERATIONS.md#the-subathon-clock) before a real subathon.**
 The GoFundMe data source is an unofficial endpoint that can change without notice; the clock

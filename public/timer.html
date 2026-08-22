@@ -38,6 +38,10 @@
   <div id="toast" aria-hidden="true"><span id="toast-who"></span><span id="toast-amt"></span><span id="toast-time"></span></div>
 </div>
 
+<!-- The donation sound. src is set by timer.js (it needs the token from the path); a missing
+     upload is a 404 and play() rejects into a catch — silence, never an error on camera. -->
+<audio id="sfx-don" preload="auto"></audio>
+
 <script type="module" src="/timer.js"></script>
 </body>
 </html>

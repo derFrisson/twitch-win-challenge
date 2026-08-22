@@ -45,7 +45,12 @@ export type Step = {
 export type ServerMsg =
   | { t: 'state'; steps: Step[] }                      // the only state carrier
   | { t: 'pong' }                                      // sent by the runtime auto-responder, never by our code
-  | { t: 'error'; code: 'read_only' | 'bad_message' };  // sent immediately before a 1008 close
+  | { t: 'error'; code: 'read_only' | 'bad_message' }  // sent immediately before a 1008 close
+  // A rehearsal, never state: the overlay plays the beat locally from its rendered state and
+  // snaps back. Nothing is written, no seq is consumed, old clients ignore the unknown `t`.
+  | { t: 'sim'; kind: SimKind };
+
+export type SimKind = 'win' | 'won' | 'loss';
 
 export type ClientMsg =
   | { t: 'ping' }                  // heartbeat; MUST serialise byte-exactly as {"t":"ping"}
@@ -750,8 +755,16 @@ export class LiveRun extends DurableObject<Env> {
 
   // ==================== private: sending ====================
 
+  /** Rehearse a beat on every connected overlay. No serialise(): nothing is read or written. */
+  async simulate(kind: SimKind): Promise<{ ok: true }> {
+    this.sendAll(JSON.stringify({ t: 'sim', kind } satisfies ServerMsg));
+    return { ok: true };
+  }
+
   private broadcast(steps: Step[]): void {
-    const body = JSON.stringify({ t: 'state', steps } satisfies ServerMsg);
+    this.sendAll(JSON.stringify({ t: 'state', steps } satisfies ServerMsg));
+  }
+  private sendAll(body: string): void {
     for (const ws of this.ctx.getWebSockets()) {
       try { if (ws.readyState === WebSocket.OPEN) ws.send(body); }
       catch (e) { console.error('ws send failed', e); }

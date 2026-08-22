@@ -23,6 +23,7 @@ const flag = (k) => params.get(k) === '1';
 
 const scale = num('scale', 1, 0.5, 2);
 const fillA = num('opacity', 0.85, 0.3, 1);
+const vol = num('vol', 0.5, 0, 0.8);   // donation-sound volume; ?vol=0 mutes. Cap 0.8, as overlay.js
 const accent = (() => {
   const v = (params.get('accent') ?? '').replace(/^#/, '');
   return /^[0-9a-fA-F]{6}$/.test(v) ? `#${v}` : null;
@@ -36,6 +37,7 @@ const elTag = document.getElementById('statetag');
 const elDelta = document.getElementById('delta');
 const elToast = document.getElementById('toast');
 const elGoal = document.getElementById('goal');
+const elDon = document.getElementById('sfx-don');   // src set in the transport section (needs the token)
 
 clock.style.setProperty('--scale', String(scale));
 clock.style.setProperty('--fill-a', String(fillA));
@@ -163,6 +165,34 @@ function drain() {
   document.getElementById('toast-amt').textContent = str('amount', a.amountCents);
   document.getElementById('toast-time').textContent = `+${formatHMS(a.addedMs)}`;
   elToast.removeAttribute('data-run'); void elToast.offsetWidth; elToast.dataset.run = '1';
+  playDonSound();
+}
+
+// One sound per toast, aligned with it. No upload -> the src 404s -> play() rejects -> silence.
+// No user-gesture unlock needed: obs-browser runs with --autoplay-policy=no-user-gesture-required;
+// the .catch() covers a normal browser tab.
+function playDonSound() {
+  if (vol === 0 || !elDon.src) return;
+  elDon.volume = vol;
+  try { elDon.currentTime = 0; } catch { /* readyState 0 before metadata */ }
+  elDon.play().catch(() => {});
+}
+
+// The §6.2/§6.3 rehearsal: toast + sound + the clock visibly jumping, then back to the truth.
+// Nothing here touches server state — `timer` is patched in place and restored unless a real
+// step replaced it in the meantime (a new step builds a new object, so identity is the guard).
+function simDonation(a) {
+  enqueue([a]);
+  flashDelta(a.addedMs);
+  if (timer !== null && timer.phase === 'running' && timer.endsAt !== null) {
+    const ref = timer;
+    const realEndsAt = timer.endsAt;
+    timer.endsAt += a.addedMs;
+    paint();
+    setTimeout(() => {
+      if (timer === ref) { timer.endsAt = realEndsAt; paint(); }
+    }, 5000);
+  }
 }
 elToast.addEventListener('animationend', () => {
   elToast.removeAttribute('data-run');
@@ -172,6 +202,7 @@ elToast.addEventListener('animationend', () => {
 
 // ======================== transport ========================
 const token = decodeURIComponent(location.pathname.split('/')[2] ?? '');
+if (token !== '') elDon.src = `/o/${encodeURIComponent(token)}/timer/sound`;
 const BASE_MS = 500, FACTOR = 2, MAX_MS = 15000, HEARTBEAT_MS = 20000;
 const PING = JSON.stringify({ t: 'ping' });
 let ws = null, attempt = 0, heartbeat = 0, lastSeq = 0;
@@ -206,6 +237,10 @@ function connect() {
     try { msg = JSON.parse(ev.data); } catch { return; }
     if (msg === null || typeof msg !== 'object') return;
     if (msg.t === 'error') { console.error('timer: server refused the socket', msg.code); return; }
+    if (msg.t === 'sim' && msg.alert && typeof msg.alert.addedMs === 'number') {
+      simDonation(msg.alert);
+      return;
+    }
     if (msg.t !== 'timer' || !Array.isArray(msg.steps)) return;
 
     for (const step of msg.steps) {
