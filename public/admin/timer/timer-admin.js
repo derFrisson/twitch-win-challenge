@@ -63,7 +63,7 @@ function scheduleTick() {
 function renderReadout() {
   const tm = state.timer, pool = state.pool;
   const live = tm.phase === 'running';
-  document.body.dataset.phase = live ? 'live' : 'idle';
+  document.body.dataset.phase = live ? 'live' : tm.phase === 'paused' ? 'paused' : 'idle';
   $('pill-text').textContent = tm.phase === 'running' ? 'LIVE'
     : tm.phase === 'paused' ? t('pause')
     : tm.phase === 'ended' ? t('pillEnded')

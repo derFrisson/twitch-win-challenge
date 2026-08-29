@@ -33,3 +33,7 @@
 #stats { flex-wrap: wrap; gap: var(--s-3) var(--s-4); }
 #stats .ctr-v { white-space: nowrap; font-size: var(--t-lg); }
 #stats .ctr { min-width: 0; }
+
+/* admin.css hides every .act-row while not live, which swallowed the Resume button on this
+   page. While paused, the pause/resume row must stay reachable. */
+body[data-phase="paused"] .act-row:first-of-type { display: flex; }
