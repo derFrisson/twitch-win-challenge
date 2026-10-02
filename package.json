@@ -17,5 +17,5 @@
     "deploy": "npm run check && wrangler deploy"
   },
   "dependencies": { "jose": "^6" },
-  "devDependencies": { "wrangler": "^4.125.0", "typescript": "^5", "@types/node": "^24" }
+  "devDependencies": { "wrangler": "^4.147.0", "typescript": "^5", "@types/node": "^24" }
 }
